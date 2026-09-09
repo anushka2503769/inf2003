@@ -1,0 +1,20 @@
+# Local dependencies and build outputs
+node_modules/
+dist/
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+coverage/
+*.tsbuildinfo
+
+# Private configuration and local files
+.env
+.env.*
+!.env.example
+.DS_Store
+*.log
+.idea/
+# Temporary pytest directories if a sandbox interrupts cache creation
+pytest-cache-files-*/
