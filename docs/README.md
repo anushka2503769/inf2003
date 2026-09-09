@@ -108,7 +108,14 @@ It does not run against production services or need credentials.
 
 ## Working together
 
-1. Start a focused branch from the team's agreed shared base, initially `main`.
+Start with [the team guide](team/README.md) and your individual task guide. Coding
+agents discover this routing through the root `AGENTS.md` (the sole Markdown-location
+exception); say your name and ask for your next unfinished task.
+
+The first milestone's shared endpoint names, JSON examples and error behaviour are in
+[API.md](API.md). Frontend mocks and backend routes should follow that contract.
+
+1. Start a focused branch from the team's agreed shared base, `dev`.
    Use `feat/<short-task>`, `fix/<short-task>` or `docs/<short-task>`.
 2. Agree on API request/response shapes before implementing connected screens and routes.
    Keep implemented routes documented by FastAPI's OpenAPI schema; record proposed
@@ -130,6 +137,10 @@ fixtures in tests. Authentication and per-user access checks are required before
 implementing real user-data endpoints.
 
 ## Layout and design references
+
+For the initial Supabase tables, see [database setup](DB/README.md) and
+[001_initial_schema.sql](DB/001_initial_schema.sql). Creating tables does not yet connect
+the Python application to them.
 
 ```text
 frontend/src/                  React UI (TypeScript)

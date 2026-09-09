@@ -3,11 +3,14 @@
 Provisional, approved discussion baseline as of 9 September 2026. No migrations have
 been applied. Revisit constraints and schema as the course progresses.
 
+The runnable Supabase bootstrap is [DB/001_initial_schema.sql](DB/001_initial_schema.sql).
+See [DB/README.md](DB/README.md) for application instructions and verification limits.
+
 ## PostgreSQL
 
 | Table | Fields and types | Keys and rules |
 |---|---|---|
-| users | user_id UUID; full_name text; created_at timestamptz; updated_at timestamptz | PK user_id; all required. Auth account link is conditional on final auth design. |
+| users | user_id UUID; full_name text; created_at timestamptz; updated_at timestamptz | PK user_id; FK to auth.users.id; all required. Google sign-in through Supabase Auth. |
 | skills | skill_id integer; name text | Generated PK skill_id; required name, case-insensitive unique. Synonyms need application normalization. |
 | user_skills | user_id UUID; skill_id integer | Composite PK (user_id, skill_id); FKs to users and skills. Both required. |
 | jobs | job_id UUID; source text; external_job_id text; title text; company_name text; location text; job_type text; work_arrangement text; application_url text; source_posted_at timestamptz; first_seen_at timestamptz; last_seen_at timestamptz; is_active boolean | PK job_id; unique (source, external_job_id). location, job_type, work_arrangement and source_posted_at may be null; other fields required. is_active defaults true. |
@@ -74,9 +77,13 @@ erDiagram
 
 The junction tables implement users↔skills, jobs↔skills and users↔jobs many-to-many
 relationships. Each link references exactly one existing row on either side. A parent
-can have zero or many links. Deletion/cascade policies remain to be agreed.
+can have zero or many links. The bootstrap uses ON DELETE RESTRICT for every FK;
+account deletion and cross-database cleanup flows remain to be designed.
 
 ## MongoDB
+
+Bootstrap: [DB/001_initial_collections.js](DB/001_initial_collections.js), run in mongosh.
+See [DB/README.md](DB/README.md#mongodb) for BSON types and application responsibilities.
 
 ### resume_documents
 
@@ -127,5 +134,6 @@ status into documents just to support filtering. Reassess if dataset size change
   cross-provider duplicates or reposts using new IDs.
 - An absent job in one API page is not evidence of closure.
 - Match scores are user-dependent; do not put a global score on jobs.
-- Auth, constraints/index migrations, deletion policy and cross-store recovery remain
-  design work before real student data is accepted.
+- Google sign-in through Supabase Auth is agreed. All application-data access goes
+  through Python. Token verification, deletion flows and cross-store recovery remain
+  implementation work before real student data is accepted.

@@ -16,10 +16,15 @@ The application should be complete, explainable and small enough for all five me
 - Zhihao: moderator, final review, consolidation and integration.
 - Nasya and Anuska: frontend.
 - Jason and Jiaxin: backend and database integration.
+- Task ownership and coding-agent entry instructions: [team guide](team/README.md).
+  Jason owns Supabase/SQL and backend auth; Jiaxin owns MongoDB. Members configure
+  their respective development storage and arrange appropriate team access.
 - Frontend: React + TypeScript + Vite; npm with package-lock.json.
 - Backend: Python 3.14 + FastAPI; uv with uv.lock; pytest and Ruff.
 - Planned databases: Supabase/PostgreSQL and MongoDB.
 - Browser talks to Python through `/api`; Python will own database and provider integrations.
+- Google sign-in uses Supabase Auth directly. Python verifies the access token and owns
+  all application-data access; the browser does not query application tables directly.
 - No additional queue server, cache service, microservices or container orchestration for the base.
 
 ## Framework acceptance criteria (current delivery)
@@ -32,6 +37,10 @@ The application should be complete, explainable and small enough for all five me
 - No external credentials or databases are required to start the skeleton.
 
 ## Product MVP (planned, not implemented by the framework setup)
+
+First implementation milestone: Google sign-in, profile creation/editing and manual
+selection of confirmed skills from a seeded dictionary. The working API contract is
+[API.md](API.md); these routes are not implemented yet. Resume upload follows this slice.
 
 ### Profile
 
@@ -103,6 +112,9 @@ SQL: users, skills, user_skills, jobs, job_skills, user_jobs.
 MongoDB: resume_documents, job_documents.
 Cross-database UUID references are application-managed, not foreign keys.
 No migrations or live collections are provisioned in this framework delivery.
+The provisional SQL bootstrap is now in `DB/001_initial_schema.sql`, with instructions
+in `DB/README.md`. MongoDB collection setup is in `DB/001_initial_collections.js`.
+Neither bootstrap has been applied; database execution verification remains pending.
 
 ## Product verification before calling the MVP complete
 
@@ -119,7 +131,7 @@ No migrations or live collections are provisioned in this framework delivery.
 
 ## Still open
 
-Authentication flow/provider; account deletion and referential actions; external job and LLM
+Authentication implementation; account deletion and cleanup flows; external job and LLM
 providers; normalization/role taxonomy; ranking and semantic method; batch thresholds and
 conflict handling; inactive-job policy; SQL/Mongo recovery; final Mongo validation and indexing;
 deployment; frontend feature-test tooling. Schema refinements require discussion and PRD/ERD updates.
