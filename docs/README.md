@@ -32,6 +32,21 @@ Windows users can run the same commands in PowerShell. A virtual-environment act
 step is not necessary: `uv run` uses `backend/.venv` automatically. The first install
 requires internet access. Do not use global pip installs for this project.
 
+## Environment configuration
+
+The current health-check skeleton does not require environment variables. When database
+integration begins, create a private backend configuration from the committed template:
+
+```sh
+cp backend/.env.example backend/.env
+```
+
+Windows PowerShell users can run `Copy-Item backend/.env.example backend/.env` instead.
+Replace the placeholders only in `backend/.env`; Git ignores that file. Supabase secret
+keys and MongoDB credentials stay on the backend and must never use a `VITE_` prefix,
+because Vite exposes prefixed values to the browser. Job API and LLM variables will be
+added after the team selects those providers.
+
 ## Start development
 
 Open two terminals, each starting in the repository root.
@@ -120,6 +135,7 @@ implementing real user-data endpoints.
 frontend/src/                  React UI (TypeScript)
 backend/app/                   FastAPI application (Python)
 backend/tests/                 API tests
+backend/.env.example           Safe backend configuration template
 .github/                       CI workflow
 docs/erd.md                    Current provisional schema and relationships
 docs/PRD.md                    MVP scope, acceptance criteria and open decisions
