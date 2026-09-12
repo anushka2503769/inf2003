@@ -28,8 +28,8 @@ def main() -> None:
     try:
         client.admin.command("ping")
         print("✅ Connected successfully to MongoDB Atlas!")
-    except Exception as error:
-        print(f"❌ Connection failed: {error}")
+    except Exception:
+        print("❌ Connection failed.")
     finally:
         client.close()
 
