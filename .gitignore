@@ -8,6 +8,7 @@ __pycache__/
 .ruff_cache/
 coverage/
 *.tsbuildinfo
+graphify-out/
 
 # Private configuration and local files
 .env
