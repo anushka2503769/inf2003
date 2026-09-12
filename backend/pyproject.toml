@@ -9,6 +9,8 @@ dependencies = [
     # Verifies Supabase access tokens. The crypto extra provides the ES256/RS256
     # algorithms used by Supabase asymmetric signing keys.
     "pyjwt[crypto]>=2.10.1",
+    "pymongo>=4.18.1",
+    "python-dotenv>=1.2.3",
 ]
 
 [dependency-groups]
