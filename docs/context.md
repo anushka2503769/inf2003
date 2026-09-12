@@ -7,8 +7,11 @@ See [README.md](README.md) for setup and team workflow.
 Jobless Simulator helps students discover suitable jobs, save both interested and
 not-interested decisions, track external applications and explore target-role skill gaps.
 
-The team selected TypeScript frontend and Python backend. The starter uses React/Vite
-and FastAPI. PostgreSQL and MongoDB integrations are planned, not implemented.
+The team selected TypeScript frontend and Python backend. The current auth shell uses
+React/Vite and FastAPI: Google sign-in is handled by Supabase Auth, while the API
+verifies tokens and serves onboarding/profile routes. Profile rows are currently held
+in a process-local memory store; PostgreSQL and MongoDB integrations remain planned,
+not implemented.
 
 Zhihao moderates and performs final review. Nasya and Anuska handle frontend;
 Jason and Jiaxin handle backend. The professor accepted the current skeleton as an MVP

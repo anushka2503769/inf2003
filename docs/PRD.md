@@ -2,7 +2,7 @@
 
 Status: provisional MVP baseline, 9 September 2026. The professor considers the
 current database skeleton suitable as a starting point; refine it as the module progresses.
-This document distinguishes the runnable framework from planned product functionality.
+This document distinguishes the runnable auth shell from planned product functionality.
 
 ## Goal
 
@@ -25,11 +25,11 @@ The application should be complete, explainable and small enough for all five me
 ## Framework acceptance criteria (current delivery)
 
 - A teammate can install both projects using the README and lockfiles.
-- Frontend renders a starter screen and calls GET /api/health through the development proxy.
-- The screen distinguishes checking, connected and unavailable states, with manual retry.
-- Backend returns a typed health response and exposes OpenAPI documentation.
+- Frontend provides Google sign-in, onboarding and profile screens through the development proxy.
+- Backend verifies bearer tokens, returns a typed health response, and exposes profile routes and OpenAPI documentation.
+- The profile store is process-local memory; it is a development seam for the planned PostgreSQL integration.
 - Frontend build/type checks and backend test/lint checks are repeatable locally and in CI.
-- No external credentials or databases are required to start the skeleton.
+- Supabase configuration is required for real sign-in; no database service is required for this auth-shell slice.
 
 ## Product MVP (planned, not implemented by the framework setup)
 
@@ -119,8 +119,8 @@ No migrations or live collections are provisioned in this framework delivery.
 
 ## Still open
 
-Authentication flow/provider; account deletion and referential actions; external job and LLM
-providers; normalization/role taxonomy; ranking and semantic method; batch thresholds and
+Account deletion and referential actions; external job and LLM providers;
+normalization/role taxonomy; ranking and semantic method; batch thresholds and
 conflict handling; inactive-job policy; SQL/Mongo recovery; final Mongo validation and indexing;
 deployment; frontend feature-test tooling. Schema refinements require discussion and PRD/ERD updates.
 
