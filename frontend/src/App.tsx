@@ -1,59 +1,53 @@
-import { useEffect, useState } from 'react'
+import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom'
 
+import { AppShell } from './app/AppShell'
+import { RequireNoProfile, RequireProfile, RequireSession } from './app/guards'
+import { routes } from './app/routes'
+import { ProfileProvider } from './auth/ProfileProvider'
+import { SessionProvider } from './auth/SessionProvider'
+import { AuthCallbackScreen } from './screens/AuthCallbackScreen'
+import { NotFoundScreen } from './screens/NotFoundScreen'
+import { DiscoverScreen, SkillGapScreen, VaultScreen } from './screens/Placeholders'
+import { OnboardingScreen } from './screens/onboarding/OnboardingScreen'
+import { ProfileScreen } from './screens/ProfileScreen'
+import { SignInScreen } from './screens/SignInScreen'
+
+/**
+ * Route table for the whole app.
+ *
+ * The nesting is the access rule: everything under RequireSession needs a
+ * Google session, and everything under RequireProfile additionally needs a
+ * finished onboarding. New feature screens go inside the AppShell branch.
+ */
 export default function App() {
-  const [status, setStatus] = useState('Checking connection…')
-  const [attempt, setAttempt] = useState(0)
-
-  useEffect(() => {
-    const controller = new AbortController()
-    const timeout = window.setTimeout(() => controller.abort(), 5000)
-    let active = true
-    setStatus('Checking connection…')
-
-    async function checkConnection() {
-      try {
-        const response = await fetch('/api/health', { signal: controller.signal })
-        if (!response.ok) throw new Error('API unavailable')
-        const data: unknown = await response.json()
-        if (typeof data !== 'object' || data === null || !('status' in data) || data.status !== 'ok') {
-          throw new Error('Unexpected API response')
-        }
-        if (active) setStatus('Backend connected')
-      } catch {
-        if (active) setStatus('Backend unavailable. Start the API on port 8000, then retry.')
-      } finally {
-        window.clearTimeout(timeout)
-      }
-    }
-
-    void checkConnection()
-    return () => {
-      active = false
-      controller.abort()
-      window.clearTimeout(timeout)
-    }
-  }, [attempt])
-
   return (
-    <main>
-      <p className="eyebrow">INF2003 · Team workspace</p>
-      <h1>Jobless Simulator</h1>
-      <p className="intro">Find opportunities that fit your skills. Understand what to learn next.</p>
-      <section aria-labelledby="setup-title">
-        <h2 id="setup-title">Development starter</h2>
-        <p>This is the shared project foundation. The application features are still to be built.</p>
-        <p role="status">{status}</p>
-        <button onClick={() => setAttempt(value => value + 1)}>Check connection</button>
-      </section>
-      <section aria-labelledby="scope-title">
-        <h2 id="scope-title">MVP areas</h2>
-        <ul>
-          <li><strong>Profile:</strong> upload a resume and confirm skills.</li>
-          <li><strong>Discover:</strong> filter and review matched opportunities.</li>
-          <li><strong>Vault:</strong> keep decisions and track applications.</li>
-          <li><strong>Skill gap:</strong> compare your skills with a target role.</li>
-        </ul>
-      </section>
-    </main>
+    <BrowserRouter>
+      <SessionProvider>
+        <ProfileProvider>
+          <Routes>
+            <Route path={routes.signIn} element={<SignInScreen />} />
+            <Route path={routes.authCallback} element={<AuthCallbackScreen />} />
+
+            <Route element={<RequireSession />}>
+              <Route element={<RequireNoProfile />}>
+                <Route path={routes.welcome} element={<OnboardingScreen />} />
+              </Route>
+
+              <Route element={<RequireProfile />}>
+                <Route element={<AppShell />}>
+                  <Route path={routes.discover} element={<DiscoverScreen />} />
+                  <Route path={routes.vault} element={<VaultScreen />} />
+                  <Route path={routes.skillGap} element={<SkillGapScreen />} />
+                  <Route path={routes.profile} element={<ProfileScreen />} />
+                </Route>
+              </Route>
+            </Route>
+
+            <Route path="/" element={<Navigate to={routes.discover} replace />} />
+            <Route path="*" element={<NotFoundScreen />} />
+          </Routes>
+        </ProfileProvider>
+      </SessionProvider>
+    </BrowserRouter>
   )
 }

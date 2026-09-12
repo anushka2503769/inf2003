@@ -3,8 +3,10 @@
 INF2003 team project: discover relevant internships/jobs, save decisions, track
 applications and identify skill gaps for a target role.
 
-**Current state:** minimal development foundation. The frontend connects to a Python
-health endpoint. Product features and database integrations are not implemented yet.
+**Current state:** the auth shell is implemented. The frontend supports Google sign-in,
+onboarding and profile editing; the Python API verifies tokens and exposes profile
+routes. Profiles use a process-local memory store for now, so data is lost when the API
+restarts. Product discovery, tracking and database integrations are not implemented yet.
 
 ## Team
 
@@ -34,18 +36,27 @@ requires internet access. Do not use global pip installs for this project.
 
 ## Environment configuration
 
-The current health-check skeleton does not require environment variables. When database
-integration begins, create a private backend configuration from the committed template:
+The frontend needs Supabase's browser-safe URL and publishable key for Google sign-in.
+Copy its template and fill in the values from the team's Supabase project:
+
+```sh
+cp frontend/.env.example frontend/.env.local
+```
+
+The API needs `SUPABASE_URL` in a private backend configuration to verify access tokens.
+Copy the committed backend template and fill it in locally:
 
 ```sh
 cp backend/.env.example backend/.env
 ```
 
 Windows PowerShell users can run `Copy-Item backend/.env.example backend/.env` instead.
-Replace the placeholders only in `backend/.env`; Git ignores that file. Supabase secret
-keys and MongoDB credentials stay on the backend and must never use a `VITE_` prefix,
-because Vite exposes prefixed values to the browser. Job API and LLM variables will be
-added after the team selects those providers.
+Replace the placeholders only in the ignored local files. Supabase secret keys and
+database credentials stay on the backend and must never use a `VITE_` prefix, because
+Vite exposes prefixed values to the browser. Job API and LLM variables will be added
+after the team selects those providers. For local work before a Supabase project is
+available, `AUTH_ALLOW_UNVERIFIED_TOKENS=true` enables the development-only token
+bypass; never use it with `APP_ENV=production`.
 
 ## Start development
 
@@ -62,7 +73,7 @@ Backend:
 
 ```sh
 cd backend
-uv run --locked uvicorn app.main:app --reload --host 127.0.0.1 --port 8000
+uv run --env-file .env --locked uvicorn app.main:app --reload --host 127.0.0.1 --port 8000
 ```
 
 - Frontend: http://127.0.0.1:5173
@@ -72,9 +83,9 @@ uv run --locked uvicorn app.main:app --reload --host 127.0.0.1 --port 8000
 
 The Vite development server forwards `/api` requests to the backend on port 8000.
 Use relative `/api/...` paths in frontend requests. This avoids development CORS
-configuration. No credentials, `.env` file or database service is needed for this starter.
-If the frontend reports that the backend is unavailable, start the API and click
-**Check connection**. If a port is occupied, stop the other process; changing the API
+configuration. The profile store is memory-only, so no database service is needed for
+this auth-shell slice. If the frontend reports that the backend is unavailable, start
+the API and reload. If a port is occupied, stop the other process; changing the API
 port also requires changing the Vite proxy target.
 
 The Vite proxy is development-only. `npm run preview` previews static build output;
