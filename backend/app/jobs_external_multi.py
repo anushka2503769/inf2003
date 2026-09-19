@@ -1,97 +1,120 @@
-"""
-Fetches jobs from one or more registered sources (see job_sources.py)
-and stores each as raw JSON in job_documents - no PDF step, matching
-the "just get fetching working" simplified approach.
-"""
+"""Administrator-controlled provider refresh with SQL/Mongo readiness ordering."""
 
 import json
-import uuid
 from datetime import datetime, timezone
 from typing import List, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query
-from pymongo.database import Database
-from pymongo.errors import WriteError
+from fastapi import APIRouter, Query
+from pymongo.errors import PyMongoError, WriteError
 
-from backend.app.db import get_db
-from backend.app.job_fetch_schemas import FetchedJobSummary, FetchJobsResponse
-from backend.app.job_skill_extraction import extract_skills_from_job
-from backend.app.job_sources import SOURCE_REGISTRY, fetch_from_sources
+from .dependencies import AdminJobDatabase
+from .errors import ApiError
+from .job_fetch_schemas import FetchedJobSummary, FetchJobsResponse
+from .job_skill_extraction import extract_skills_from_job
+from .job_sources import SOURCE_REGISTRY, ProviderJobError, fetch_from_sources
+from .sql_access import (
+    SqlAccessError,
+    set_job_active,
+    upsert_provider_job,
+)
 
 router = APIRouter(prefix="/api/jobs/external", tags=["jobs-external"])
 
 
 @router.post("/fetch-multi", response_model=FetchJobsResponse)
 def fetch_and_store_jobs_multi(
+    db: AdminJobDatabase,
     sources: List[str] = Query(
-        default=["arbeitnow"],
-        description=f"Which sources to pull from. Known: {list(SOURCE_REGISTRY.keys())}",
+        default=["arbeitnow"], description=f"Known sources: {list(SOURCE_REGISTRY)}"
     ),
-    limit_per_source: int = Query(5, ge=1, le=2000, description="Max jobs to fetch per source"),
-    total_limit: Optional[int] = Query(
-        default=None,
-        ge=1,
-        le=5000,
-        description="If set, overrides limit_per_source by splitting this total evenly across the requested sources",
-    ),
-    db: Database = Depends(get_db),
+    limit_per_source: int = Query(5, ge=1, le=2000),
+    total_limit: Optional[int] = Query(None, ge=1, le=5000),
 ) -> FetchJobsResponse:
-    """
-    Example (manual per-source control):
-        POST /api/jobs/external/fetch-multi?sources=arbeitnow&sources=devitjobs_uk&limit_per_source=5
-
-    Example (target a total count, auto-split across sources):
-        POST /api/jobs/external/fetch-multi?sources=arbeitnow&sources=devitjobs_uk&sources=ai_dev_jobs&total_limit=1000
-    """
-    effective_limit_per_source = limit_per_source
+    effective_limit = limit_per_source
     if total_limit is not None:
-        effective_limit_per_source = -(-total_limit // len(sources))  # ceil division
-
-    all_jobs = fetch_from_sources(sources, limit_per_source=effective_limit_per_source)
-
+        effective_limit = -(-total_limit // len(sources))
+    try:
+        all_jobs = fetch_from_sources(sources, limit_per_source=effective_limit)
+    except ProviderJobError as exc:
+        raise ApiError(422, "validation_failed", str(exc)) from exc
     if total_limit is not None:
-        all_jobs = all_jobs[:total_limit]  # trim any overshoot from ceil division
-
+        all_jobs = all_jobs[:total_limit]
     if not all_jobs:
-        raise HTTPException(
-            status_code=502,
-            detail="No jobs returned from any requested source. Check server logs for per-source errors.",
+        raise ApiError(
+            502, "service_unavailable", "No valid jobs were returned by the requested source."
         )
 
-    inserted_summaries = []
-
+    inserted: list[FetchedJobSummary] = []
     for job in all_jobs:
-        job_id = str(uuid.uuid4())
-        extracted_at = datetime.now(timezone.utc)
         raw_jd = json.dumps(job, ensure_ascii=False)
-
-        # Classify profession/industry and match skills BEFORE inserting,
-        # so job_documents never stores the "Unclassified" stub for jobs
-        # fetched through this endpoint.
-        extracted_data = extract_skills_from_job(raw_jd)
-
-        document = {
-            "job_id": job_id,
-            "title": job.get("title", "Untitled Role"),  # top-level for fast/indexed search
-            "raw_jd": raw_jd,
-            "extracted_data": extracted_data,
-            "extracted_at": extracted_at,
-        }
-
         try:
-            result = db["job_documents"].insert_one(document)
+            extracted_data = extract_skills_from_job(raw_jd, require_database=True)
+        except Exception as exc:
+            raise ApiError(
+                503, "service_unavailable", "Canonical skill extraction is temporarily unavailable."
+            ) from exc
+        if isinstance(extracted_data.get("provider"), dict):
+            extracted_data["provider"]["ready"] = "false"
+        job_id = None
+        try:
+            job_id = str(upsert_provider_job(job, extracted_data))
+            extracted_at = datetime.now(timezone.utc)
+            document = {
+                "job_id": job_id,
+                "raw_jd": raw_jd,
+                "extracted_data": extracted_data,
+                "extracted_at": extracted_at,
+            }
+            collection = db["job_documents"]
+            result = collection.replace_one({"job_id": job_id}, document, upsert=True)
+            if result.upserted_id is not None:
+                document_id = result.upserted_id
+            else:
+                current = collection.find_one({"job_id": job_id}, {"_id": 1})
+                if current is None:
+                    raise RuntimeError("MongoDB did not return the replaced job document.")
+                document_id = current["_id"]
+            collection.update_one(
+                {"job_id": job_id}, {"$set": {"extracted_data.provider.ready": "true"}}
+            )
+            set_job_active(job_id, True)
         except WriteError as exc:
-            print(f"[fetch_and_store_jobs_multi] Validator rejected job {job_id}: {exc}")
-            continue
+            _mark_provider_pending(job_id, db)
+            raise ApiError(
+                422, "validation_failed", "A provider job failed MongoDB schema validation."
+            ) from exc
+        except (PyMongoError, SqlAccessError, RuntimeError) as exc:
+            _mark_provider_pending(job_id, db)
+            raise ApiError(
+                503, "service_unavailable", "Job refresh could not be completed; retry is safe."
+            ) from exc
 
-        inserted_summaries.append(
+        inserted.append(
             FetchedJobSummary(
-                document_id=str(result.inserted_id),
+                document_id=str(document_id),
                 job_id=job_id,
-                title=job.get("title", "Untitled Role"),
-                company_name=job.get("company", "Unknown Company"),
-                source_url=job.get("url", ""),
+                title=str(job["title"]),
+                company_name=str(job["company"]),
+                source_url=str(job["url"]),
             )
         )
+    return FetchJobsResponse(fetched_count=len(inserted), jobs=inserted)
 
-    return FetchJobsResponse(fetched_count=len(inserted_summaries), jobs=inserted_summaries)
+
+def _mark_provider_pending(job_id: str | None, db: object | None = None) -> None:
+    """Leave both stores pending so a retry cannot expose a partial refresh."""
+    if job_id is None:
+        return
+    if db is not None:
+        try:
+            db["job_documents"].update_one(
+                {"job_id": job_id},
+                {"$set": {"extracted_data.provider.ready": "false"}},
+            )
+        except PyMongoError:
+            pass
+    try:
+        set_job_active(job_id, False)
+    except SqlAccessError:
+        # The original failure is more useful to the client; retry can repair readiness.
+        pass

@@ -1,17 +1,14 @@
-"""
-Reporting endpoints that run raw SQL against Postgres (Supabase),
-demonstrating JOIN, WHERE, ORDER BY, and UNION SELECT in genuine,
-executable queries - not simulated.
-"""
+"""Authenticated own-user SQL reports over active job requirements."""
 
 from typing import List
 
-from fastapi import APIRouter, HTTPException
+import psycopg2
+from fastapi import APIRouter
 from pydantic import BaseModel
-from psycopg2 import sql as pg_sql
-from psycopg2.errors import UndefinedTable
 
-from backend.app.sql_db import get_pg_connection
+from .auth import CurrentUser
+from .errors import ApiError
+from .sql_db import get_pg_connection
 
 router = APIRouter(prefix="/api/reports", tags=["reports"])
 
@@ -19,7 +16,7 @@ router = APIRouter(prefix="/api/reports", tags=["reports"])
 class SkillProfileRow(BaseModel):
     skill_id: int
     skill_name: str
-    source: str  # "user_has" or "required_by_active_job"
+    source: str
 
 
 class SkillProfileResponse(BaseModel):
@@ -28,48 +25,41 @@ class SkillProfileResponse(BaseModel):
     rows: List[SkillProfileRow]
 
 
-@router.get("/skill-profile/{user_id}", response_model=SkillProfileResponse)
-def get_skill_profile(user_id: str) -> SkillProfileResponse:
-    """
-    Runs one SQL query combining two labeled result sets via UNION:
-      1. Skills this user already has (JOIN user_skills -> skills, WHERE user_id = %s)
-      2. Skills required by any active job posting (JOIN job_skills -> skills, WHERE requirement_type = 'REQUIRED')
-    Sorted with ORDER BY skill_name so the two sources interleave alphabetically.
-
-    Note: if job_skills isn't populated yet (or doesn't exist), this still
-    runs - it just returns the user_has rows. UNION doesn't require both
-    sides to have matching data, only matching column shape.
-    """
+@router.get("/skill-profile", response_model=SkillProfileResponse)
+def get_skill_profile(user: CurrentUser) -> SkillProfileResponse:
     query = """
         SELECT s.skill_id, s.name AS skill_name, 'user_has' AS source
-        FROM user_skills us
-        JOIN skills s ON us.skill_id = s.skill_id
+        FROM public.user_skills us
+        JOIN public.skills s ON us.skill_id = s.skill_id
         WHERE us.user_id = %(user_id)s
 
         UNION
 
-        SELECT s.skill_id, s.name AS skill_name, 'required_by_active_job' AS source
-        FROM job_skills js
-        JOIN skills s ON js.skill_id = s.skill_id
-        WHERE js.requirement_type = 'REQUIRED'
+        SELECT DISTINCT s.skill_id, s.name AS skill_name, 'required_by_active_job' AS source
+        FROM public.job_skills js
+        JOIN public.skills s ON js.skill_id = s.skill_id
+        JOIN public.jobs j ON j.job_id = js.job_id
+        WHERE js.requirement_type = 'REQUIRED' AND j.is_active = true
 
         ORDER BY skill_name;
     """
-
-    conn = get_pg_connection()
+    conn = None
     try:
-        with conn.cursor() as cur:
-            cur.execute(query, {"user_id": user_id})
-            rows = cur.fetchall()
-    except UndefinedTable as exc:
-        raise HTTPException(
-            status_code=503,
-            detail=f"A required table doesn't exist yet (check with your team's SQL owner): {exc}",
+        conn = get_pg_connection()
+        with conn.cursor() as cursor:
+            cursor.execute(query, {"user_id": str(user.user_id)})
+            rows = cursor.fetchall()
+    except (RuntimeError, psycopg2.Error) as exc:
+        raise ApiError(
+            503, "service_unavailable", "The report is temporarily unavailable."
         ) from exc
     finally:
-        conn.close()
+        if conn is not None:
+            conn.close()
 
     result_rows = [
         SkillProfileRow(skill_id=row[0], skill_name=row[1], source=row[2]) for row in rows
     ]
-    return SkillProfileResponse(user_id=user_id, row_count=len(result_rows), rows=result_rows)
+    return SkillProfileResponse(
+        user_id=str(user.user_id), row_count=len(result_rows), rows=result_rows
+    )

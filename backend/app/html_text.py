@@ -13,9 +13,7 @@ _LIST_ITEM_RE = re.compile(r"<li[^>]*>(.*?)</li>", re.IGNORECASE | re.DOTALL)
 _BR_RE = re.compile(r"<br\s*/?>", re.IGNORECASE)
 # Closing block-level tags should leave a line break behind, or text from
 # adjacent blocks runs together with no separator (e.g. "TitleNext paragraph")
-_BLOCK_CLOSE_RE = re.compile(
-    r"</(p|div|li|ul|ol|h1|h2|h3|h4|h5|h6)\s*>", re.IGNORECASE
-)
+_BLOCK_CLOSE_RE = re.compile(r"</(p|div|li|ul|ol|h1|h2|h3|h4|h5|h6)\s*>", re.IGNORECASE)
 
 
 def _fully_unescape(raw: str) -> str:

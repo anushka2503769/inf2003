@@ -1,12 +1,22 @@
-import json
+"""Administrator re-extraction with SQL link synchronization."""
+
 from typing import List
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter
 from pydantic import BaseModel
 from pymongo.database import Database
+from pymongo.errors import PyMongoError, WriteError
 
-from backend.app.db import get_db
-from backend.app.job_skill_extraction import extract_skills_from_job
+from .dependencies import AdminJobDatabase
+from .errors import ApiError
+from .job_skill_extraction import extract_skills_from_job
+from .sql_access import (
+    SqlAccessError,
+    SqlParentMissing,
+    ensure_sql_job_exists,
+    replace_job_skills,
+    set_job_active,
+)
 
 router = APIRouter(prefix="/api/jobs", tags=["jobs-extraction"])
 
@@ -21,56 +31,68 @@ class BatchExtractResponse(BaseModel):
     results: List[ExtractSkillsResult]
 
 
-def _extract_title(raw_jd: str) -> str:
-    """Pulls 'title' back out of raw_jd's JSON, for backfilling older documents
-    that were inserted before 'title' became a top-level field."""
+def _mark_pending(db: Database, document_id: object, job_id: str) -> None:
+    """Keep both stores hidden/inactive after a partial re-extraction."""
     try:
-        job = json.loads(raw_jd)
-        if isinstance(job, dict):
-            return job.get("title", "Untitled Role")
-    except (json.JSONDecodeError, TypeError):
+        db["job_documents"].update_one(
+            {"_id": document_id}, {"$set": {"extracted_data.provider.ready": "false"}}
+        )
+    except PyMongoError:
         pass
-    return "Untitled Role"
+    try:
+        set_job_active(job_id, False)
+    except SqlAccessError:
+        pass
+
+
+def _extract_one(db: Database, doc: dict) -> ExtractSkillsResult:
+    job_id = str(doc.get("job_id", ""))
+    try:
+        ensure_sql_job_exists(job_id)
+        set_job_active(job_id, False)
+        extracted_data = extract_skills_from_job(doc["raw_jd"], require_database=True)
+        provider = (
+            extracted_data.get("provider")
+            or (doc.get("extracted_data") or {}).get("provider")
+            or {}
+        )
+        provider["ready"] = "false"
+        extracted_data["provider"] = provider
+        db["job_documents"].update_one(
+            {"_id": doc["_id"]}, {"$set": {"extracted_data": extracted_data}}
+        )
+        replace_job_skills(job_id, extracted_data["requirements"])
+        db["job_documents"].update_one(
+            {"_id": doc["_id"]}, {"$set": {"extracted_data.provider.ready": "true"}}
+        )
+        set_job_active(job_id, True)
+    except SqlParentMissing as exc:
+        raise ApiError(404, "not_found", "The SQL job does not exist.") from exc
+    except WriteError as exc:
+        _mark_pending(db, doc.get("_id"), job_id)
+        raise ApiError(
+            422, "validation_failed", "The extracted document failed schema validation."
+        ) from exc
+    except (PyMongoError, SqlAccessError, KeyError, RuntimeError) as exc:
+        _mark_pending(db, doc.get("_id"), job_id)
+        raise ApiError(
+            503, "service_unavailable", "Job extraction could not be completed; retry is safe."
+        ) from exc
+    return ExtractSkillsResult(
+        job_id=job_id,
+        matched_skill_ids=[int(req["skill_id"]) for req in extracted_data["requirements"]],
+    )
 
 
 @router.post("/{job_id}/extract-skills", response_model=ExtractSkillsResult)
-def extract_skills_for_job(job_id: str, db: Database = Depends(get_db)) -> ExtractSkillsResult:
-    """Re-runs skill extraction on one job_documents entry and saves the result."""
+def extract_skills_for_job(job_id: str, db: AdminJobDatabase) -> ExtractSkillsResult:
     doc = db["job_documents"].find_one({"job_id": job_id})
     if doc is None:
-        raise HTTPException(status_code=404, detail=f"No job document found for job_id={job_id}")
-
-    extracted_data = extract_skills_from_job(doc["raw_jd"])
-    title = doc.get("title") or _extract_title(doc["raw_jd"])
-
-    db["job_documents"].update_one(
-        {"job_id": job_id},
-        {"$set": {"extracted_data": extracted_data, "title": title}},
-    )
-
-    matched_ids = [req["skill_id"] for req in extracted_data["requirements"]]
-    return ExtractSkillsResult(job_id=job_id, matched_skill_ids=matched_ids)
+        raise ApiError(404, "not_found", "No job document was found.")
+    return _extract_one(db, doc)
 
 
 @router.post("/extract-skills/batch", response_model=BatchExtractResponse)
-def extract_skills_for_all_jobs(db: Database = Depends(get_db)) -> BatchExtractResponse:
-    """
-    Re-runs skill extraction on every job_documents entry currently
-    stored, and backfills the top-level 'title' field for any older
-    documents that were inserted before search support was added.
-    """
-    results = []
-
-    for doc in db["job_documents"].find({}):
-        extracted_data = extract_skills_from_job(doc["raw_jd"])
-        title = doc.get("title") or _extract_title(doc["raw_jd"])
-
-        db["job_documents"].update_one(
-            {"_id": doc["_id"]},
-            {"$set": {"extracted_data": extracted_data, "title": title}},
-        )
-
-        matched_ids = [req["skill_id"] for req in extracted_data["requirements"]]
-        results.append(ExtractSkillsResult(job_id=doc["job_id"], matched_skill_ids=matched_ids))
-
+def extract_skills_for_all_jobs(db: AdminJobDatabase) -> BatchExtractResponse:
+    results = [_extract_one(db, doc) for doc in db["job_documents"].find({})]
     return BatchExtractResponse(processed_count=len(results), results=results)

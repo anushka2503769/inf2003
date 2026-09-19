@@ -13,9 +13,9 @@ from fpdf import FPDF
 
 def _strip_html(raw_html: str) -> str:
     """Arbeitnow's description field contains HTML - strip tags and unescape entities."""
-    text = re.sub(r"<br\s*/?>", "\n", raw_html)          # line breaks first
-    text = re.sub(r"<[^>]+>", "", text)                  # remove remaining tags
-    text = html.unescape(text)                           # &amp; -> &, etc.
+    text = re.sub(r"<br\s*/?>", "\n", raw_html)  # line breaks first
+    text = re.sub(r"<[^>]+>", "", text)  # remove remaining tags
+    text = html.unescape(text)  # &amp; -> &, etc.
     return text.strip()
 
 

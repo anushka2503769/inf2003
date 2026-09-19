@@ -9,8 +9,8 @@ from io import BytesIO
 import pypdf
 from docx import Document
 
-from backend.app.section_parser import split_into_sections
-from backend.app.skill_matcher import match_skills
+from .section_parser import split_into_sections
+from .skill_matcher import match_skills
 
 SUPPORTED_CONTENT_TYPES = {
     "application/pdf",
@@ -58,7 +58,7 @@ def extract_raw_text(file_bytes: bytes, file_kind: str) -> str:
     raise ValueError(f"Unsupported file_kind: {file_kind}")
 
 
-def extract_structured_fields(raw_text: str) -> dict:
+def extract_structured_fields(raw_text: str, *, require_database: bool = True) -> dict:
     """
     Keyword/rule-based extraction:
     - skills: matched against the SQL skills table (see skill_matcher.py)
@@ -67,8 +67,8 @@ def extract_structured_fields(raw_text: str) -> dict:
     sections = split_into_sections(raw_text)
 
     return {
-        "skills": match_skills(raw_text),
-        "education": sections["education"],
-        "experience": sections["experience"],
-        "projects": sections["projects"],
+        "skills": match_skills(raw_text, require_database=require_database),
+        "education": [{"text": line} for line in sections["education"]],
+        "experience": [{"text": line} for line in sections["experience"]],
+        "projects": [{"text": line} for line in sections["projects"]],
     }

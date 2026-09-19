@@ -1,16 +1,19 @@
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
-from pymongo.database import Database
+from fastapi import APIRouter, File, HTTPException, UploadFile
 from pymongo.errors import WriteError
 
-from backend.app.db import get_db
-from backend.app.resume_extraction import (
+from .auth import CurrentUser
+from .dependencies import AuthenticatedDatabase
+from .document_access import replace_current_resume
+from .resume_extraction import (
     extract_raw_text,
     extract_structured_fields,
     resolve_file_kind,
 )
-from backend.app.schemas import ExtractedData, ResumeUploadResponse
+from .schemas import ExtractedData, ResumeUploadResponse
+from .skills_repository import SkillsRepositoryError
+from .sql_access import SqlAccessError, SqlParentMissing, ensure_sql_user_exists
 
 router = APIRouter(prefix="/api/resumes", tags=["resumes"])
 
@@ -19,9 +22,9 @@ MAX_FILE_SIZE_BYTES = 5 * 1024 * 1024  # 5 MB
 
 @router.post("/upload", response_model=ResumeUploadResponse)
 async def upload_resume(
-    user_id: str = Form(..., description="UUID of the user, matches SQL users.user_id"),
+    user: CurrentUser,
+    db: AuthenticatedDatabase,
     file: UploadFile = File(...),
-    db: Database = Depends(get_db),
 ) -> ResumeUploadResponse:
     """
     Accepts a PDF or DOCX resume, extracts text, and stores it in
@@ -45,8 +48,25 @@ async def upload_resume(
     if not raw_text.strip():
         raise HTTPException(status_code=422, detail="No readable text found in file.")
 
-    extracted_data = extract_structured_fields(raw_text)
+    try:
+        extracted_data = extract_structured_fields(raw_text)
+    except SkillsRepositoryError as exc:
+        raise HTTPException(
+            status_code=503, detail="SQL skills dictionary is unavailable."
+        ) from exc
     uploaded_at = datetime.now(timezone.utc)
+
+    user_id = str(user.user_id)
+    try:
+        ensure_sql_user_exists(user_id)
+    except SqlParentMissing as exc:
+        raise HTTPException(
+            status_code=404, detail="Complete your profile before uploading a resume."
+        ) from exc
+    except SqlAccessError as exc:
+        raise HTTPException(
+            status_code=503, detail="SQL profile validation is unavailable."
+        ) from exc
 
     document = {
         "user_id": user_id,
@@ -57,15 +77,15 @@ async def upload_resume(
     }
 
     try:
-        result = db["resume_documents"].insert_one(document)
+        stored = replace_current_resume(db, document)
     except WriteError as exc:
         # Fires if the document doesn't match the collection's validator
-        raise HTTPException(status_code=422, detail=f"Document failed validation: {exc}") from exc
+        raise HTTPException(status_code=422, detail="Resume document failed validation.") from exc
 
     return ResumeUploadResponse(
-        resume_id=str(result.inserted_id),
-        user_id=user_id,
-        file_name=file.filename,
-        uploaded_at=uploaded_at,
-        extracted_data=ExtractedData(**extracted_data),
+        resume_id=str(stored["_id"]),
+        user_id=stored["user_id"],
+        file_name=stored["file_name"],
+        uploaded_at=stored["uploaded_at"],
+        extracted_data=ExtractedData(**stored["extracted_data"]),
     )

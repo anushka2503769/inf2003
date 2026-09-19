@@ -7,8 +7,7 @@ this copy is the one that is actually enforced.
 
 import re
 from datetime import datetime
-from typing import Annotated
-from typing import List
+from typing import Annotated, Any
 from uuid import UUID
 
 from pydantic import BaseModel, Field, field_validator
@@ -69,17 +68,17 @@ class MeResponse(BaseModel):
     profile: Profile
     onboarding_complete: bool
 
+
 class ExtractedData(BaseModel):
-    skills: List[str] = []
-    education: List[str] = []
-    experience: List[str] = []
-    projects: List[str] = []
- 
- 
+    skills: list[str] = Field(default_factory=list)
+    education: list[dict[str, Any]] = Field(default_factory=list)
+    experience: list[dict[str, Any]] = Field(default_factory=list)
+    projects: list[dict[str, Any]] = Field(default_factory=list)
+
+
 class ResumeUploadResponse(BaseModel):
     resume_id: str
     user_id: str
     file_name: str
     uploaded_at: datetime
     extracted_data: ExtractedData
- 

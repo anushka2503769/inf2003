@@ -9,6 +9,7 @@ from typing import Any
 from fastapi import FastAPI, Request, status
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
+from pymongo.errors import PyMongoError
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 _STATUS_TO_CODE = {
@@ -52,6 +53,14 @@ def register_error_handlers(app: FastAPI) -> None:
     @app.exception_handler(ApiError)
     async def _handle_api_error(_: Request, exc: ApiError) -> JSONResponse:
         return _envelope(exc.status_code, exc.code, exc.message, exc.details)
+
+    @app.exception_handler(PyMongoError)
+    async def _handle_mongo_error(_: Request, __: PyMongoError) -> JSONResponse:
+        return _envelope(
+            status.HTTP_503_SERVICE_UNAVAILABLE,
+            "service_unavailable",
+            "Document storage is temporarily unavailable.",
+        )
 
     @app.exception_handler(StarletteHTTPException)
     async def _handle_http_error(_: Request, exc: StarletteHTTPException) -> JSONResponse:

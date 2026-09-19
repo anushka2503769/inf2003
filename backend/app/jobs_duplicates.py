@@ -17,11 +17,13 @@ import json
 from collections import defaultdict
 from typing import Any, Dict, List, Optional, Tuple
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter
 from pydantic import BaseModel
 from pymongo.database import Database
 
-from backend.app.db import get_db
+from .dependencies import AdminJobDatabase
+from .errors import ApiError
+from .sql_access import get_active_job_ids
 
 router = APIRouter(prefix="/api/jobs", tags=["jobs-duplicates"])
 
@@ -78,7 +80,11 @@ def _find_duplicate_groups(db: Database) -> List[Tuple[str, List[Dict[str, Any]]
     buckets: Dict[str, List[Dict[str, Any]]] = defaultdict(list)
 
     cursor = db["job_documents"].find(
-        {}, {"_id": 1, "job_id": 1, "raw_jd": 1, "title": 1, "extracted_at": 1}
+        {
+            "job_id": {"$in": sorted(get_active_job_ids())},
+            "extracted_data.provider.ready": "true",
+        },
+        {"_id": 1, "job_id": 1, "raw_jd": 1, "title": 1, "extracted_at": 1},
     )
     for doc in cursor:
         key = _get_dedup_key(doc.get("raw_jd", ""), doc.get("title", ""))
@@ -108,7 +114,7 @@ def _build_groups(db: Database) -> List[DuplicateGroup]:
 
 
 @router.get("/duplicates", response_model=DuplicatesPreviewResponse)
-def preview_duplicates(db: Database = Depends(get_db)) -> DuplicatesPreviewResponse:
+def preview_duplicates(db: AdminJobDatabase) -> DuplicatesPreviewResponse:
     """Preview duplicate groups WITHOUT deleting anything."""
     groups = _build_groups(db)
     total_removable = sum(len(g.removed_job_ids) for g in groups)
@@ -118,14 +124,10 @@ def preview_duplicates(db: Database = Depends(get_db)) -> DuplicatesPreviewRespo
 
 
 @router.delete("/duplicates", response_model=DuplicatesDeleteResponse)
-def delete_duplicates(db: Database = Depends(get_db)) -> DuplicatesDeleteResponse:
+def delete_duplicates(db: AdminJobDatabase) -> DuplicatesDeleteResponse:
     """Deletes duplicate documents, keeping the oldest in each group."""
-    groups = _build_groups(db)
-
-    all_removable_ids = [job_id for g in groups for job_id in g.removed_job_ids]
-    if not all_removable_ids:
-        return DuplicatesDeleteResponse(group_count=0, deleted_count=0)
-
-    result = db["job_documents"].delete_many({"job_id": {"$in": all_removable_ids}})
-
-    return DuplicatesDeleteResponse(group_count=len(groups), deleted_count=result.deleted_count)
+    raise ApiError(
+        409,
+        "conflict",
+        "Duplicate deletion is disabled until SQL and Mongo cleanup is coordinated.",
+    )

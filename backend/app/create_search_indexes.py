@@ -13,13 +13,18 @@ Usage (from anywhere - repo root or backend/):
 import os
 import sys
 
-# app/ -> backend/ -> repo root (three levels up from this file itself)
-repo_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-sys.path.insert(0, repo_root)
 
-from backend.app.db import get_db  # NOTE: .db, not just "backend.app"
-from backend.app.jobs_search import ensure_title_indexes
+def main() -> None:
+    """Create the title index when this helper is run as a script."""
+    backend_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    sys.path.insert(0, backend_root)
 
-db = get_db()
-ensure_title_indexes(db)
-print("Indexes created (or already existed) on job_documents.title")
+    from app.db import get_db
+    from app.jobs_search import ensure_title_indexes
+
+    ensure_title_indexes(get_db())
+    print("Indexes created (or already existed) on job_documents.title")
+
+
+if __name__ == "__main__":
+    main()

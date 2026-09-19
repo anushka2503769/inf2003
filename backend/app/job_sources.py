@@ -22,6 +22,7 @@ import xml.etree.ElementTree as ET
 
 try:
     from lxml import etree as lxml_etree
+
     _LXML_AVAILABLE = True
 except ImportError:
     _LXML_AVAILABLE = False
@@ -29,9 +30,8 @@ from typing import Any, Callable, Dict, List
 
 import requests
 
-from backend.app.html_text import extract_list_items, strip_html_to_text
-from backend.app.job_pdf import _extract_company_name
-
+from .html_text import extract_list_items, strip_html_to_text
+from .job_pdf import _extract_company_name
 
 # ---------------------------------------------------------------------------
 # Arbeitnow (REST, JSON, no API key) - https://arbeitnow.com/api/job-board-api
@@ -86,6 +86,7 @@ def fetch_arbeitnow(limit: int = 5) -> List[Dict[str, Any]]:
                 "description": strip_html_to_text(raw_description),
                 "responsibilities": extract_list_items(raw_description),
                 "source": "arbeitnow",
+                "external_job_id": job.get("id") or job.get("slug"),
             }
         )
     return normalized
@@ -119,6 +120,8 @@ def fetch_devitjobs_uk(limit: int = 5) -> List[Dict[str, Any]]:
         title = (job_el.findtext("title") or "Untitled Role").strip()
         company = (job_el.findtext("company") or "Unknown Company").strip()
         location = (job_el.findtext("location") or "Not specified").strip()
+        external_id = (job_el.findtext("id") or job_el.findtext("job_id") or "").strip()
+        application_url = (job_el.findtext("url") or job_el.findtext("link") or "").strip()
         salary = (job_el.findtext("salary") or "").strip()
         raw_description = job_el.findtext("description") or ""
 
@@ -129,10 +132,11 @@ def fetch_devitjobs_uk(limit: int = 5) -> List[Dict[str, Any]]:
                 "location": location,
                 "remote": "remote" in location.lower(),
                 "tags": [salary] if salary else [],  # no dedicated tags field in this feed
-                "url": "",  # this feed doesn't include a per-job link
+                "url": application_url,
                 "description": strip_html_to_text(raw_description),
                 "responsibilities": extract_list_items(raw_description),
                 "source": "devitjobs_uk",
+                "external_job_id": external_id,
             }
         )
     return normalized
@@ -201,6 +205,7 @@ def fetch_ai_dev_jobs(limit: int = 5) -> List[Dict[str, Any]]:
                 "description": strip_html_to_text(raw_description) if raw_description else "",
                 "responsibilities": extract_list_items(raw_description) if raw_description else [],
                 "source": "ai_dev_jobs",
+                "external_job_id": job.get("id") or job.get("job_id") or job.get("job_uid"),
             }
         )
     return normalized
@@ -216,26 +221,65 @@ SOURCE_REGISTRY: Dict[str, Callable[[int], List[Dict[str, Any]]]] = {
 }
 
 
+class ProviderJobError(ValueError):
+    """A provider record cannot be safely persisted without stable identity."""
+
+
+def normalize_provider_job(job: Dict[str, Any]) -> Dict[str, Any]:
+    """Validate the shared provider shape without inventing an identity."""
+    normalized = dict(job)
+    source = normalized.get("source")
+    external_id = normalized.get("external_job_id")
+    title = normalized.get("title")
+    company = normalized.get("company")
+    application_url = normalized.get("url")
+    if not isinstance(source, str) or not source.strip():
+        raise ProviderJobError("Provider job is missing a valid source.")
+    if (
+        external_id is None
+        or isinstance(external_id, bool)
+        or not isinstance(external_id, (str, int))
+    ):
+        raise ProviderJobError("Provider job is missing a stable external job ID.")
+    if (
+        not isinstance(title, str)
+        or not title.strip()
+        or not isinstance(company, str)
+        or not company.strip()
+    ):
+        raise ProviderJobError("Provider job is missing title or company.")
+    if not isinstance(application_url, str) or not application_url.strip().startswith(
+        ("http://", "https://")
+    ):
+        raise ProviderJobError("Provider job is missing a valid application URL.")
+    normalized["source"] = source.strip()
+    normalized["external_job_id"] = str(external_id).strip()
+    if not normalized["external_job_id"]:
+        raise ProviderJobError("Provider job is missing a stable external job ID.")
+    normalized["url"] = application_url.strip()
+    return normalized
+
+
 def fetch_from_sources(source_names: List[str], limit_per_source: int = 5) -> List[Dict[str, Any]]:
     """
     Fetches from each named source and returns one combined, normalized list.
-    Unknown source names are skipped with a warning rather than raising,
-    so one typo doesn't break a multi-source request.
+    Unknown source names and malformed provider records fail clearly. A record
+    with no stable ID is never assigned an ID derived from its title.
     """
     all_jobs: List[Dict[str, Any]] = []
 
     for name in source_names:
         fetch_fn = SOURCE_REGISTRY.get(name)
         if fetch_fn is None:
-            print(f"[fetch_from_sources] Unknown source '{name}' - skipping. "
-                  f"Known sources: {list(SOURCE_REGISTRY.keys())}")
-            continue
+            raise ProviderJobError(f"Unknown job source '{name}'.")
 
         try:
             jobs = fetch_fn(limit_per_source)
             print(f"[fetch_from_sources] {name}: fetched {len(jobs)} jobs")
-            all_jobs.extend(jobs)
-        except Exception as exc:
-            print(f"[fetch_from_sources] {name}: fetch failed - {exc}")
+            all_jobs.extend(normalize_provider_job(job) for job in jobs)
+        except ProviderJobError:
+            raise
+        except requests.RequestException as exc:
+            raise ProviderJobError(f"Job source '{name}' is unavailable.") from exc
 
     return all_jobs
