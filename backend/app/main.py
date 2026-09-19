@@ -14,12 +14,13 @@ from . import (
     resumes_read,
 )
 from .errors import register_error_handlers
-from .routers import profile
+from .routers import profile, skills
 
 app = FastAPI(title="Jobless Simulator API", version="0.1.0")
 
 register_error_handlers(app)
 app.include_router(profile.router)
+app.include_router(skills.router)
 app.include_router(resumes.router)
 app.include_router(resumes_read.router)
 app.include_router(jobs_search.router)

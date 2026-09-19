@@ -9,12 +9,17 @@ The in-memory store is per process and is lost on restart. It is a development
 stand-in, not a cache and not a fallback to keep in production.
 """
 
+import logging
 import threading
 from datetime import UTC, datetime
+from functools import lru_cache
 from typing import Protocol
 from uuid import UUID
 
+from .config import get_settings
 from .schemas import Profile
+
+logger = logging.getLogger(__name__)
 
 
 def _now() -> datetime:
@@ -73,9 +78,34 @@ class InMemoryProfileStore:
             self._rows.clear()
 
 
-_store: ProfileStore = InMemoryProfileStore()
+_memory_store = InMemoryProfileStore()
+
+
+@lru_cache
+def _select_store() -> ProfileStore:
+    """PostgreSQL when it is configured, the development stand-in otherwise.
+
+    A teammate without DATABASE_URL still gets a running app, which is what the
+    in-memory store is for. A deployment silently keeping profiles in memory is
+    not: it would lose every profile on restart while appearing to work, so
+    production refuses to start instead.
+    """
+    settings = get_settings()
+    if settings.database_url:
+        from .sql_profile import PostgresProfileStore
+
+        return PostgresProfileStore()
+
+    if settings.is_production:
+        raise RuntimeError("DATABASE_URL must be set when APP_ENV=production.")
+
+    logger.warning(
+        "DATABASE_URL is not set; profiles are kept in memory and lost on restart. "
+        "Development only."
+    )
+    return _memory_store
 
 
 def get_profile_store() -> ProfileStore:
     """FastAPI dependency. Override in tests or swap for the database store."""
-    return _store
+    return _select_store()

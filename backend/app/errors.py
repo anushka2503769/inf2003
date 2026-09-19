@@ -12,6 +12,8 @@ from fastapi.responses import JSONResponse
 from pymongo.errors import PyMongoError
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
+from .sql_access import SqlAccessError
+
 _STATUS_TO_CODE = {
     400: "validation_failed",
     401: "unauthenticated",
@@ -61,6 +63,12 @@ def register_error_handlers(app: FastAPI) -> None:
             "service_unavailable",
             "Document storage is temporarily unavailable.",
         )
+
+    @app.exception_handler(SqlAccessError)
+    async def _handle_sql_error(_: Request, exc: SqlAccessError) -> JSONResponse:
+        # These messages are written for a student and carry no SQL, driver text
+        # or connection detail. An outage is 503, distinct from a bad credential.
+        return _envelope(status.HTTP_503_SERVICE_UNAVAILABLE, "service_unavailable", str(exc))
 
     @app.exception_handler(StarletteHTTPException)
     async def _handle_http_error(_: Request, exc: StarletteHTTPException) -> JSONResponse:

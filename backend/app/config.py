@@ -1,7 +1,12 @@
 """Runtime configuration.
 
-Values come from the process environment, which `uv run` populates from
-backend/.env when that file exists. Nothing here is sent to the browser.
+Values come from the process environment. Nothing here reads backend/.env on
+its own: pass `--env-file .env` to `uv run`, as docs/README.md does, or export
+the variables yourself. Without it the API starts unconfigured, token
+verification fails on the first request, and profiles fall back to the
+in-memory store.
+
+Nothing here is sent to the browser.
 """
 
 import os

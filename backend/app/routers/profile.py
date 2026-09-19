@@ -12,11 +12,21 @@ from fastapi import APIRouter, Depends, status
 from ..auth import CurrentUser
 from ..errors import ApiError
 from ..schemas import CreateProfileRequest, MeResponse, Profile, UpdateProfileRequest
+from ..sql_skills import confirmed_skills
 from ..store import ProfileStore, get_profile_store
 
 router = APIRouter(prefix="/api", tags=["profile"])
 
 Store = Annotated[ProfileStore, Depends(get_profile_store)]
+
+
+def _me(profile: Profile) -> MeResponse:
+    """The profile plus the confirmed skills the editor re-reads after a change."""
+    return MeResponse(
+        profile=profile,
+        skills=confirmed_skills(profile.user_id),
+        onboarding_complete=_onboarding_complete(profile),
+    )
 
 
 def _onboarding_complete(profile: Profile) -> bool:
@@ -44,7 +54,7 @@ def read_me(user: CurrentUser, store: Store) -> MeResponse:
             "not_found",
             "You have not set up your profile yet.",
         )
-    return MeResponse(profile=profile, onboarding_complete=_onboarding_complete(profile))
+    return _me(profile)
 
 
 @router.post("/me", response_model=MeResponse, status_code=status.HTTP_200_OK)
@@ -56,7 +66,7 @@ def create_me(payload: CreateProfileRequest, user: CurrentUser, store: Store) ->
     student cannot do anything about.
     """
     profile = store.upsert(user.user_id, payload.full_name)
-    return MeResponse(profile=profile, onboarding_complete=_onboarding_complete(profile))
+    return _me(profile)
 
 
 @router.patch("/me", response_model=Profile)

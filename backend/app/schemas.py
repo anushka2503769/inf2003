@@ -64,8 +64,24 @@ class UpdateProfileRequest(BaseModel):
         return None if value is None else _validate_full_name(value)
 
 
+class Skill(BaseModel):
+    """An entry in the shared SQL skill dictionary."""
+
+    skill_id: int
+    name: str
+
+
+class SkillSearchResponse(BaseModel):
+    items: list[Skill]
+    has_more: bool
+
+
 class MeResponse(BaseModel):
     profile: Profile
+    # Always an array, empty for a student who has confirmed nothing yet. The
+    # skill editor re-reads GET /api/me after each change rather than keeping
+    # its own copy, so this is the single source of confirmed membership.
+    skills: list[Skill] = []
     onboarding_complete: bool
 
 
