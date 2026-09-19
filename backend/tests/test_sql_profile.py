@@ -104,6 +104,19 @@ def test_onboarding_is_safe_to_retry(store) -> None:
     assert _row_count() == 1
 
 
+def test_delayed_onboarding_retry_preserves_a_renamed_profile(store) -> None:
+    _sign_up(ANA)
+    created = store.upsert(ANA, "Ana Lim")
+    renamed = store.update_name(ANA, "Ana Tan")
+    assert renamed is not None
+
+    retried = store.upsert(ANA, "Ana Lim")
+
+    assert retried.full_name == "Ana Tan"
+    assert retried.created_at == created.created_at
+    assert retried.updated_at == renamed.updated_at
+
+
 def test_renaming_moves_updated_at_and_keeps_created_at(store) -> None:
     _sign_up(ANA)
     created = store.upsert(ANA, "Ana Lim")
@@ -185,6 +198,8 @@ def test_simultaneous_first_logins_create_one_profile(store) -> None:
     # created_at is never part of the conflict update, so every caller sees the
     # creation time of whichever transaction won.
     assert len({profile.created_at for profile in profiles}) == 1
+    assert len({profile.full_name for profile in profiles}) == 1
+    assert len({profile.updated_at for profile in profiles}) == 1
 
 
 def test_upsert_waits_for_a_competing_insert(store) -> None:
@@ -200,10 +215,10 @@ def test_upsert_waits_for_a_competing_insert(store) -> None:
         with blocker.cursor() as cursor:
             cursor.execute(
                 "INSERT INTO public.users (user_id, full_name)"
-                " VALUES (%s, %s) RETURNING created_at",
+                " VALUES (%s, %s) RETURNING created_at, updated_at",
                 (str(ANA), "First Writer"),
             )
-            first_created_at = cursor.fetchone()[0]
+            first_created_at, first_updated_at = cursor.fetchone()
 
         def second_writer() -> None:
             try:
@@ -224,8 +239,9 @@ def test_upsert_waits_for_a_competing_insert(store) -> None:
 
     assert "error" not in outcome, f"the conflict was not handled: {outcome.get('error')}"
     profile = outcome["profile"]
-    assert profile.full_name == "Second Writer"
+    assert profile.full_name == "First Writer"
     assert profile.created_at == first_created_at
+    assert profile.updated_at == first_updated_at
     assert _row_count() == 1
 
 

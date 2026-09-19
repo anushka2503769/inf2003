@@ -18,19 +18,28 @@ import psycopg2
 from psycopg2 import errors as pg_errors
 from psycopg2.extensions import connection as PGConnection
 
-from .schemas import Profile
+from .schemas import Profile, Skill
 from .sql_access import SqlAccessError
 from .sql_db import get_pg_connection
+from .store import ProfileSnapshot
 
 _COLUMNS = "user_id, full_name, created_at, updated_at"
 
 _UPSERT = f"""
 INSERT INTO public.users (user_id, full_name)
 VALUES (%s, %s)
-ON CONFLICT (user_id) DO UPDATE
-    SET full_name = EXCLUDED.full_name,
-        updated_at = now()
+ON CONFLICT (user_id) DO NOTHING
 RETURNING {_COLUMNS}
+"""
+
+_SELECT = f"SELECT {_COLUMNS} FROM public.users WHERE user_id = %s"
+
+_SELECT_SKILLS = """
+SELECT s.skill_id, s.name
+  FROM public.user_skills AS us
+  JOIN public.skills AS s ON s.skill_id = us.skill_id
+ WHERE us.user_id = %s
+ ORDER BY lower(s.name), s.skill_id
 """
 
 # Inside UPDATE, a column reference in an expression is the pre-update value,
@@ -55,6 +64,26 @@ def _connect() -> PGConnection:
         raise SqlAccessError("The profile database is unavailable.") from exc
 
 
+def _read_profile(cursor, user_id: UUID) -> Profile | None:
+    cursor.execute(_SELECT, (str(user_id),))
+    row = cursor.fetchone()
+    return _profile(row) if row else None
+
+
+def _read_skills(cursor, user_id: UUID) -> list[Skill]:
+    cursor.execute(_SELECT_SKILLS, (str(user_id),))
+    return [Skill(skill_id=row[0], name=row[1]) for row in cursor.fetchall()]
+
+
+def _write_profile(cursor, user_id: UUID, full_name: str) -> Profile | None:
+    """Insert once, then read the winner when another writer already inserted."""
+    cursor.execute(_UPSERT, (str(user_id), full_name))
+    row = cursor.fetchone()
+    if row:
+        return _profile(row)
+    return _read_profile(cursor, user_id)
+
+
 class PostgresProfileStore:
     """Reads and writes public.users.
 
@@ -68,34 +97,42 @@ class PostgresProfileStore:
         conn = _connect()
         try:
             with conn.cursor() as cursor:
-                cursor.execute(
-                    f"SELECT {_COLUMNS} FROM public.users WHERE user_id = %s",
-                    (str(user_id),),
-                )
-                row = cursor.fetchone()
-            return _profile(row) if row else None
+                return _read_profile(cursor, user_id)
+        except psycopg2.Error as exc:
+            raise SqlAccessError("The profile could not be read.") from exc
+        finally:
+            conn.close()
+
+    def get_with_skills(self, user_id: UUID) -> ProfileSnapshot | None:
+        """Reads the profile and confirmed skills through one connection."""
+        conn = _connect()
+        try:
+            with conn.cursor() as cursor:
+                profile = _read_profile(cursor, user_id)
+                if profile is None:
+                    return None
+                return ProfileSnapshot(profile=profile, skills=_read_skills(cursor, user_id))
         except psycopg2.Error as exc:
             raise SqlAccessError("The profile could not be read.") from exc
         finally:
             conn.close()
 
     def upsert(self, user_id: UUID, full_name: str) -> Profile:
-        """Creates the row, or updates the name when it already exists.
+        """Creates the row, or returns the existing row unchanged.
 
         ON CONFLICT rather than check-then-insert: a retry after a lost response
         must not raise a conflict the student cannot act on, and two simultaneous
-        first logins must not produce two rows. created_at is absent from the
-        update, so the original creation time survives a retry.
+        first logins must not produce two rows. The conflict branch performs no
+        update, so the stored name and timestamps survive a retry.
         """
         conn = _connect()
         try:
             with conn.cursor() as cursor:
-                cursor.execute(_UPSERT, (str(user_id), full_name))
-                row = cursor.fetchone()
-                if row is None:
+                profile = _write_profile(cursor, user_id, full_name)
+                if profile is None:
                     raise SqlAccessError("The profile write did not return a row.")
             conn.commit()
-            return _profile(row)
+            return profile
         except SqlAccessError:
             conn.rollback()
             raise
@@ -103,6 +140,31 @@ class PostgresProfileStore:
             # public.users.user_id references auth.users.id. A verified token
             # always has that account, so this means the API is pointed at a
             # different project than the one that issued the token.
+            conn.rollback()
+            raise SqlAccessError(
+                "The signed-in account does not exist in this project's authentication store."
+            ) from exc
+        except psycopg2.Error as exc:
+            conn.rollback()
+            raise SqlAccessError("The profile could not be saved; nothing was written.") from exc
+        finally:
+            conn.close()
+
+    def upsert_with_skills(self, user_id: UUID, full_name: str) -> ProfileSnapshot:
+        """Create or preserve a profile and read its response before commit."""
+        conn = _connect()
+        try:
+            with conn.cursor() as cursor:
+                profile = _write_profile(cursor, user_id, full_name)
+                if profile is None:
+                    raise SqlAccessError("The profile write did not return a row.")
+                snapshot = ProfileSnapshot(profile=profile, skills=_read_skills(cursor, user_id))
+            conn.commit()
+            return snapshot
+        except SqlAccessError:
+            conn.rollback()
+            raise
+        except pg_errors.ForeignKeyViolation as exc:
             conn.rollback()
             raise SqlAccessError(
                 "The signed-in account does not exist in this project's authentication store."
