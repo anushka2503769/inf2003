@@ -7,7 +7,7 @@ the "just get fetching working" simplified approach.
 import json
 import uuid
 from datetime import datetime, timezone
-from typing import List
+from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pymongo.database import Database
@@ -27,13 +27,30 @@ def fetch_and_store_jobs_multi(
         default=["arbeitnow"],
         description=f"Which sources to pull from. Known: {list(SOURCE_REGISTRY.keys())}",
     ),
-    limit_per_source: int = Query(5, ge=1, le=200, description="Max jobs to fetch per source"),
+    limit_per_source: int = Query(5, ge=1, le=2000, description="Max jobs to fetch per source"),
+    total_limit: Optional[int] = Query(
+        default=None,
+        ge=1,
+        le=5000,
+        description="If set, overrides limit_per_source by splitting this total evenly across the requested sources",
+    ),
     db: Database = Depends(get_db),
 ) -> FetchJobsResponse:
     """
-    Example: POST /api/jobs/external/fetch-multi?sources=arbeitnow&sources=devitjobs_uk&limit_per_source=5
+    Example (manual per-source control):
+        POST /api/jobs/external/fetch-multi?sources=arbeitnow&sources=devitjobs_uk&limit_per_source=5
+
+    Example (target a total count, auto-split across sources):
+        POST /api/jobs/external/fetch-multi?sources=arbeitnow&sources=devitjobs_uk&sources=ai_dev_jobs&total_limit=1000
     """
-    all_jobs = fetch_from_sources(sources, limit_per_source=limit_per_source)
+    effective_limit_per_source = limit_per_source
+    if total_limit is not None:
+        effective_limit_per_source = -(-total_limit // len(sources))  # ceil division
+
+    all_jobs = fetch_from_sources(sources, limit_per_source=effective_limit_per_source)
+
+    if total_limit is not None:
+        all_jobs = all_jobs[:total_limit]  # trim any overshoot from ceil division
 
     if not all_jobs:
         raise HTTPException(

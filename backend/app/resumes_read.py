@@ -7,7 +7,7 @@ from typing import List
 
 from bson import ObjectId
 from bson.errors import InvalidId
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
 from pymongo.database import Database
 
@@ -22,6 +22,16 @@ class DeleteResumeResponse(BaseModel):
     deleted: bool
 
 
+class TopSkill(BaseModel):
+    skill: str
+    count: int
+
+
+class ResumeStatsResponse(BaseModel):
+    total_resumes: int
+    top_skills: List[TopSkill]
+
+
 def _doc_to_response(doc: dict) -> ResumeUploadResponse:
     return ResumeUploadResponse(
         resume_id=str(doc["_id"]),
@@ -30,6 +40,29 @@ def _doc_to_response(doc: dict) -> ResumeUploadResponse:
         uploaded_at=doc["uploaded_at"],
         extracted_data=ExtractedData(**doc["extracted_data"]),
     )
+
+
+@router.get("/stats", response_model=ResumeStatsResponse)
+def get_resume_stats(
+    top_n: int = Query(10, ge=1, le=50, description="How many top skills to return"),
+    db: Database = Depends(get_db),
+) -> ResumeStatsResponse:
+    """
+    Summary stats across all stored resumes: total count, and the most
+    frequently occurring skills across every resume's extracted_data.
+    """
+    total_resumes = db["resume_documents"].count_documents({})
+
+    pipeline = [
+        {"$unwind": "$extracted_data.skills"},
+        {"$group": {"_id": "$extracted_data.skills", "count": {"$sum": 1}}},
+        {"$sort": {"count": -1}},
+        {"$limit": top_n},
+    ]
+    results = db["resume_documents"].aggregate(pipeline)
+    top_skills = [TopSkill(skill=doc["_id"], count=doc["count"]) for doc in results]
+
+    return ResumeStatsResponse(total_resumes=total_resumes, top_skills=top_skills)
 
 
 @router.get("/{resume_id}", response_model=ResumeUploadResponse)

@@ -19,6 +19,12 @@ then register it in SOURCE_REGISTRY at the bottom of this file.
 
 import time
 import xml.etree.ElementTree as ET
+
+try:
+    from lxml import etree as lxml_etree
+    _LXML_AVAILABLE = True
+except ImportError:
+    _LXML_AVAILABLE = False
 from typing import Any, Callable, Dict, List
 
 import requests
@@ -96,7 +102,16 @@ def fetch_devitjobs_uk(limit: int = 5) -> List[Dict[str, Any]]:
     response = requests.get(DEVITJOBS_UK_FEED_URL, headers=headers, timeout=10)
     response.raise_for_status()
 
-    root = ET.fromstring(response.content)
+    if _LXML_AVAILABLE:
+        # lxml's recover=True tolerates malformed XML (unescaped &, bad
+        # control chars, etc.) that this feed sometimes contains, instead
+        # of failing the whole fetch on one bad character.
+        parser = lxml_etree.XMLParser(recover=True)
+        root = lxml_etree.fromstring(response.content, parser=parser)
+    else:
+        # Fallback: standard library, which will raise ParseError on
+        # malformed XML. Install lxml (uv add lxml) for more resilient parsing.
+        root = ET.fromstring(response.content)
     job_elements = root.findall(".//job")[:limit]
 
     normalized = []
@@ -124,11 +139,80 @@ def fetch_devitjobs_uk(limit: int = 5) -> List[Dict[str, Any]]:
 
 
 # ---------------------------------------------------------------------------
+# AI Dev Jobs (REST, JSON, no API key for read access) - https://aidevboard.com/docs
+# NOTE: docs confirm the endpoint, params, and pagination (page/limit, max 50),
+# but do not show an example response body for GET /jobs itself - only for
+# /jobs/match. This function defensively checks a few likely envelope shapes
+# ("jobs" key, "data" key, or a bare list) since the exact key name wasn't
+# confirmed in the documentation fetched. If this returns 0 jobs in practice,
+# check the real response shape and adjust the _unwrap_jobs_response function.
+# ---------------------------------------------------------------------------
+AI_DEV_JOBS_API_URL = "https://aidevboard.com/api/v1/jobs"
+
+
+def _unwrap_jobs_response(data: Any) -> List[Dict[str, Any]]:
+    """Handles a few plausible response envelope shapes defensively."""
+    if isinstance(data, list):
+        return data
+    if isinstance(data, dict):
+        for key in ("jobs", "data", "results", "items"):
+            if isinstance(data.get(key), list):
+                return data[key]
+    return []
+
+
+def fetch_ai_dev_jobs(limit: int = 5) -> List[Dict[str, Any]]:
+    headers = {"User-Agent": "Mozilla/5.0 (compatible; jobless-simulator/1.0)"}
+    collected: List[Dict[str, Any]] = []
+    page = 1
+    page_size = 50  # API's documented max per page
+    max_pages = 20  # safety cap
+
+    while len(collected) < limit and page <= max_pages:
+        response = requests.get(
+            AI_DEV_JOBS_API_URL,
+            params={"page": page, "limit": page_size},
+            headers=headers,
+            timeout=10,
+        )
+        response.raise_for_status()
+        jobs_page = _unwrap_jobs_response(response.json())
+
+        if not jobs_page:
+            break  # no more results, or unexpected response shape
+
+        collected.extend(jobs_page)
+        page += 1
+        time.sleep(0.3)  # respect the documented hourly rate limit
+
+    raw_jobs = collected[:limit]
+
+    normalized = []
+    for job in raw_jobs:
+        raw_description = job.get("description", "")
+        normalized.append(
+            {
+                "title": job.get("title", "Untitled Role"),
+                "company": job.get("company_name", "Unknown Company"),
+                "location": job.get("location", "Not specified"),
+                "remote": job.get("workplace") == "remote",
+                "tags": job.get("tags", []),
+                "url": job.get("url", "") or job.get("apply_url", ""),
+                "description": strip_html_to_text(raw_description) if raw_description else "",
+                "responsibilities": extract_list_items(raw_description) if raw_description else [],
+                "source": "ai_dev_jobs",
+            }
+        )
+    return normalized
+
+
+# ---------------------------------------------------------------------------
 # Registry - add new sources here once you write their fetch function above
 # ---------------------------------------------------------------------------
 SOURCE_REGISTRY: Dict[str, Callable[[int], List[Dict[str, Any]]]] = {
     "arbeitnow": fetch_arbeitnow,
     "devitjobs_uk": fetch_devitjobs_uk,
+    "ai_dev_jobs": fetch_ai_dev_jobs,
 }
 
 
