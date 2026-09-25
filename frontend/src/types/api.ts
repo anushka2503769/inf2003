@@ -68,6 +68,12 @@ export type ApiErrorCode =
   | 'conflict'
   | 'rate_limited'
   | 'internal_error'
+  /**
+   * Emitted by the real backend's error handler (backend/app/errors.py) on
+   * Mongo/SQL access failures, but was missing from this union — added to
+   * close that gap. See features/skills/mocks.ts for where this was found.
+   */
+  | 'service_unavailable'
   /** Client-side only: request aborted or the network never answered. */
   | 'network_error'
   /** Client-side only: the response was not the JSON shape we agreed on. */
@@ -111,6 +117,14 @@ export interface UpdateProfileRequest {
 export interface MeResponse {
   profile: Profile
   onboarding_complete: boolean
+  /**
+   * The student's confirmed skills. Matches Jason's backend schema exactly
+   * (backend/app/schemas.py, jason/seedskills branch) — added here to bring
+   * the shared type in line with what the API actually returns; previously
+   * absent even though every /api/me response includes it. `SkillEditor`'s
+   * `confirmedSkills` prop is meant to be sourced from this field.
+   */
+  skills: Skill[]
 }
 
 /* -------------------------------------------------------------------------- */

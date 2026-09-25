@@ -93,13 +93,7 @@ export const MOCK_VALIDATION_ERROR: ApiErrorBody = {
 
 export const MOCK_SERVICE_UNAVAILABLE: ApiErrorBody = {
   error: {
-    // Real gap, found while typechecking this fix: the backend's error
-    // handler (backend/app/errors.py) genuinely emits `service_unavailable`
-    // for Mongo/SQL access failures, but the shared `ApiErrorCode` union in
-    // types/api.ts does not include it — every other code in this file
-    // matches the union exactly with no cast needed; this is the one
-    // real exception, not a leftover from the earlier uppercase mistake.
-    code: 'service_unavailable' as ApiErrorBody['error']['code'],
+    code: 'service_unavailable',
     message: 'Document storage is temporarily unavailable.',
   },
 }

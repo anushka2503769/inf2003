@@ -20,7 +20,7 @@ export interface ProfileContextValue {
   profile: Profile | null
   onboardingComplete: boolean
   error: string | null
-  reload: () => void
+  reload: () => Promise<void>
   /** Creates the row during onboarding. */
   createProfile: (fullName: string) => Promise<void>
   /** Renames the student. Resolves once the server has confirmed. */
@@ -35,7 +35,41 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
   const [onboardingComplete, setOnboardingComplete] = useState(false)
   const [status, setStatus] = useState<ProfileStatus>('idle')
   const [error, setError] = useState<string | null>(null)
-  const [reloadToken, setReloadToken] = useState(0)
+
+  // Pulled out of the effect so an explicit reload() call can await the same
+  // fetch the effect runs on session change, and reject on genuine failure —
+  // "missing" (no profile row yet) is deliberately NOT a rejection, since
+  // that is a normal state here, not an error.
+  const fetchProfile = useCallback(async (signal?: AbortSignal) => {
+    setStatus('loading')
+    setError(null)
+    try {
+      const result = await profileApi.get(signal)
+      if (signal?.aborted) return
+      setProfile(result.profile)
+      setOnboardingComplete(result.onboarding_complete)
+      setStatus('ready')
+    } catch (cause) {
+      if (signal?.aborted) return
+      if (isApiError(cause) && cause.code === 'not_found') {
+        setProfile(null)
+        setOnboardingComplete(false)
+        setStatus('missing')
+        return
+      }
+      setStatus('error')
+      setError(
+        isApiError(cause) && cause.code === 'network_error'
+          ? 'Cannot reach the server. Start the API on port 8000, then reload.'
+          : 'Your profile did not load.',
+      )
+      // Re-thrown so an explicit reload() caller (e.g. SkillEditor, after an
+      // add/remove) can tell success from failure. The session-change effect
+      // below ignores this rejection on purpose — it already reflects the
+      // failure via `status`/`error` state, which is all that effect needs.
+      throw cause
+    }
+  }, [])
 
   useEffect(() => {
     if (sessionStatus !== 'signed-in') {
@@ -49,36 +83,16 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
     }
 
     const controller = new AbortController()
-    setStatus('loading')
-    setError(null)
-
-    profileApi
-      .get(controller.signal)
-      .then(result => {
-        setProfile(result.profile)
-        setOnboardingComplete(result.onboarding_complete)
-        setStatus('ready')
-      })
-      .catch((cause: unknown) => {
-        if (controller.signal.aborted) return
-        if (isApiError(cause) && cause.code === 'not_found') {
-          setProfile(null)
-          setOnboardingComplete(false)
-          setStatus('missing')
-          return
-        }
-        setStatus('error')
-        setError(
-          isApiError(cause) && cause.code === 'network_error'
-            ? 'Cannot reach the server. Start the API on port 8000, then reload.'
-            : 'Your profile did not load.',
-        )
-      })
+    fetchProfile(controller.signal).catch(() => {
+      // Intentionally swallowed: fetchProfile has already set status/error;
+      // this catch exists only so a genuine failure doesn't surface as an
+      // unhandled promise rejection from this effect.
+    })
 
     return () => controller.abort()
-  }, [sessionStatus, reloadToken])
+  }, [sessionStatus, fetchProfile])
 
-  const reload = useCallback(() => setReloadToken(value => value + 1), [])
+  const reload = useCallback(() => fetchProfile(), [fetchProfile])
 
   const createProfile = useCallback(async (fullName: string) => {
     const result = await profileApi.create({ full_name: fullName })
