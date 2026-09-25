@@ -18,6 +18,21 @@ export interface SkillsClientError {
   status: number
   code: string
   message: string
+  details?: Record<string, unknown>
+}
+
+/**
+ * The real backend (backend/app/errors.py + routers/skills.py) reuses a
+ * single `not_found` code for both a missing profile and a missing skill,
+ * disambiguating with `details.resource`. There is no separate
+ * `SKILL_NOT_FOUND` / `PROFILE_NOT_FOUND` code — callers that need to tell
+ * these apart must check `details.resource`, not `code` alone.
+ */
+export function isMissingResource(
+  error: SkillsClientError,
+  resource: 'skill' | 'profile',
+): boolean {
+  return error.code === 'not_found' && error.details?.resource === resource
 }
 
 export function isSkillsClientError(value: unknown): value is SkillsClientError {
@@ -40,7 +55,12 @@ export interface SkillsClient {
 
 function toClientError(cause: unknown): SkillsClientError {
   if (cause instanceof MockApiFailure) {
-    return { status: cause.status, code: cause.body.error.code, message: cause.body.error.message }
+    return {
+      status: cause.status,
+      code: cause.body.error.code,
+      message: cause.body.error.message,
+      details: cause.body.error.details,
+    }
   }
   return { status: 0, code: 'network_error', message: 'Something did not work. Try again.' }
 }

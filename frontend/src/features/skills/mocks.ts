@@ -11,7 +11,6 @@
 
 import type { ApiErrorBody } from '../../types/api'
 import type { SkillSearchResponse } from './types'
-import { SKILL_ERROR_CODES } from './types'
 
 /* -------------------------------------------------------------------------- */
 /* Dictionary — the full synthetic "skills" table this mock searches over     */
@@ -58,42 +57,50 @@ export const MOCK_CONFIRMED_SKILLS: ReadonlyArray<{ skill_id: number; name: stri
 ]
 
 /* -------------------------------------------------------------------------- */
-/* Error bodies — exact envelope + exact contract casing                      */
+/* Error bodies — exact envelope, verified against Jason's actual backend     */
+/* (backend/app/errors.py + routers/skills.py on jason/seedskills, merged     */
+/* into dev). Earlier drafts of this file used docs/API.md's uppercase codes */
+/* (SKILL_NOT_FOUND, PROFILE_NOT_FOUND, VALIDATION_ERROR, SERVICE_UNAVAILABLE)*/
+/* — that doc is stale. The real, live contract is lowercase and reuses a    */
+/* single `not_found` code for both a missing profile and a missing skill,  */
+/* disambiguated by `details.resource`, matching the frontend's existing    */
+/* `ApiErrorCode` union in types/api.ts exactly (no cast needed here).       */
 /* -------------------------------------------------------------------------- */
 
 export const MOCK_SKILL_NOT_FOUND: ApiErrorBody = {
   error: {
-    // Cast: shared ApiErrorCode is lowercase today; contract says uppercase.
-    // See features/skills/types.ts "PROPOSED SHARED CHANGES" for why this
-    // mock deliberately uses the real contract string instead of the
-    // (currently wrong) shared union.
-    code: SKILL_ERROR_CODES.skillNotFound as ApiErrorBody['error']['code'],
-    message: 'That skill is no longer available. Refresh your search and try again.',
-    details: {},
+    code: 'not_found',
+    message: 'That skill is no longer in the dictionary.',
+    details: { resource: 'skill' },
   },
 }
 
 export const MOCK_PROFILE_NOT_FOUND: ApiErrorBody = {
   error: {
-    code: SKILL_ERROR_CODES.profileNotFound as ApiErrorBody['error']['code'],
-    message: 'Finish setting up your profile before adding skills.',
-    details: {},
+    code: 'not_found',
+    message: 'You have not set up your profile yet.',
+    details: { resource: 'profile' },
   },
 }
 
 export const MOCK_VALIDATION_ERROR: ApiErrorBody = {
   error: {
-    code: SKILL_ERROR_CODES.validation as ApiErrorBody['error']['code'],
-    message: 'Check the submitted fields.',
-    details: { fields: [{ field: 'skill_id', message: 'Must be a positive integer.' }] },
+    code: 'validation_failed',
+    message: 'Input should be greater than or equal to 1',
+    details: { field: 'limit' },
   },
 }
 
 export const MOCK_SERVICE_UNAVAILABLE: ApiErrorBody = {
   error: {
-    code: SKILL_ERROR_CODES.serviceUnavailable as ApiErrorBody['error']['code'],
-    message: 'The server had a problem with that request. Try again in a moment.',
-    details: {},
+    // Real gap, found while typechecking this fix: the backend's error
+    // handler (backend/app/errors.py) genuinely emits `service_unavailable`
+    // for Mongo/SQL access failures, but the shared `ApiErrorCode` union in
+    // types/api.ts does not include it — every other code in this file
+    // matches the union exactly with no cast needed; this is the one
+    // real exception, not a leftover from the earlier uppercase mistake.
+    code: 'service_unavailable' as ApiErrorBody['error']['code'],
+    message: 'Document storage is temporarily unavailable.',
   },
 }
 

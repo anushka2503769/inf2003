@@ -30,15 +30,15 @@ export interface SkillSearchResponse {
 }
 
 /**
- * `MeResponse` (types/api.ts) currently has no `skills` field, even though
- * POST/GET/PATCH /api/me all return one per docs/API.md. `SkillEditor` needs
- * this list as its `confirmedSkills` prop. Proposing the shared type gain a
- * `skills: UserSkill[]` field rather than this feature re-fetching it
- * separately, so there is exactly one place profile+skills are read together.
+ * `MeResponse` (types/api.ts) currently has no `skills` field. This is no
+ * longer a guess: Jason's actual backend schema (backend/app/schemas.py,
+ * jason/seedskills branch, merged into dev) already returns
+ * `skills: list[Skill] = []` on `MeResponse` — the frontend shared type on
+ * `dev` just hasn't been updated to match yet. `SkillEditor` needs this list
+ * as its `confirmedSkills` prop.
  *
- * Proposed home: types/api.ts, as `MeResponse.skills` and `Profile`-adjacent
- * (exact placement — on `Profile` vs. sibling on `MeResponse` — is Nasya's
- * call, since `ProfileProvider` owns `Profile`).
+ * Proposed home: types/api.ts, as `MeResponse.skills` (matches backend
+ * field name and placement exactly).
  */
 export type MeResponseWithSkills = {
   skills: UserSkill[]
@@ -60,22 +60,18 @@ export type AsyncProfileReload = () => Promise<void>
 
 /**
  * `ApiErrorCode` (types/api.ts) is a lowercase union (`not_found`,
- * `validation_failed`, ...) but docs/API.md specifies uppercase codes
- * (`SKILL_NOT_FOUND`, `PROFILE_NOT_FOUND`, `VALIDATION_ERROR`,
- * `SERVICE_UNAVAILABLE`) and `api-client.ts` passes `body.code` through
- * unchecked. As written, `error.code === 'not_found'` can never match a real
- * `PROFILE_NOT_FOUND` response — this affects existing code (ProfileProvider)
- * as well as this feature. Not fixing it here since it's a shared-file change
- * with app-wide blast radius; flagging so `SkillEditor`'s own error handling
- * doesn't quietly encode the same mismatch. `SkillEditor` will compare against
- * the literal contract strings below until the shared union is corrected.
+ * `validation_failed`, ...). An earlier draft of this feature assumed
+ * docs/API.md's uppercase codes (`SKILL_NOT_FOUND`, `VALIDATION_ERROR`, ...)
+ * were the real, current contract and flagged the lowercase union as stale.
+ * That was wrong: checked against Jason's actual backend implementation
+ * (backend/app/errors.py + routers/skills.py, merged into dev) and it uses
+ * the lowercase codes, matching `ApiErrorCode` exactly — including reusing
+ * a single `not_found` for both a missing profile and a missing skill,
+ * disambiguated by `details.resource` rather than by separate codes.
+ * `docs/API.md` is the document that's stale here, not the shared type.
+ * See client.ts's `isMissingResource()` for the resource-disambiguation
+ * helper this implies.
  */
-export const SKILL_ERROR_CODES = {
-  skillNotFound: 'SKILL_NOT_FOUND',
-  profileNotFound: 'PROFILE_NOT_FOUND',
-  validation: 'VALIDATION_ERROR',
-  serviceUnavailable: 'SERVICE_UNAVAILABLE',
-} as const
 
 /* -------------------------------------------------------------------------- */
 /* SkillEditor props — the agreed integration surface with Nasya's shell       */

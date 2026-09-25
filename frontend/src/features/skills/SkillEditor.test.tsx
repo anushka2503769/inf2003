@@ -23,8 +23,13 @@ function makeFakeClient(overrides: Partial<SkillsClient> = {}): SkillsClient {
   }
 }
 
-function clientError(status: number, code: string, message: string): SkillsClientError {
-  return { status, code, message }
+function clientError(
+  status: number,
+  code: string,
+  message: string,
+  details?: Record<string, unknown>,
+): SkillsClientError {
+  return { status, code, message, details }
 }
 
 const PYTHON = { skill_id: 1, name: 'Python' }
@@ -132,7 +137,7 @@ describe('initial render and search', () => {
   it('surfaces a search failure without crashing and without showing stale results as current', async () => {
     const client = makeFakeClient({
       search: vi.fn(async () => {
-        throw clientError(503, 'SERVICE_UNAVAILABLE', 'The server had a problem with that request.')
+        throw clientError(503, 'service_unavailable', 'The server had a problem with that request.')
       }),
     })
     render(<SkillEditor confirmedSkills={[]} onProfileReload={vi.fn()} client={client} />)
@@ -175,11 +180,13 @@ describe('adding a skill', () => {
     await waitFor(() => expect(within(row).getByRole('button', { name: /^add$/i })).toBeEnabled())
   })
 
-  it('shows SKILL_NOT_FOUND inline and never calls onProfileReload for a failed add', async () => {
+  it('shows a not_found (resource: skill) error inline and never calls onProfileReload for a failed add', async () => {
     const client = makeFakeClient({
       search: vi.fn(async () => ({ items: [PYTHON], has_more: false })),
       add: vi.fn(async () => {
-        throw clientError(404, 'SKILL_NOT_FOUND', 'That skill is no longer available.')
+        throw clientError(404, 'not_found', 'That skill is no longer in the dictionary.', {
+          resource: 'skill',
+        })
       }),
     })
     const onProfileReload = vi.fn(async () => undefined)
@@ -192,7 +199,7 @@ describe('adding a skill', () => {
     await user.click(within(row).getByRole('button', { name: /^add$/i }))
 
     await waitFor(() =>
-      expect(within(row).getByText('That skill is no longer available.')).toBeInTheDocument(),
+      expect(within(row).getByText('That skill is no longer in the dictionary.')).toBeInTheDocument(),
     )
     expect(onProfileReload).not.toHaveBeenCalled()
     // The row must not silently claim success: the Add button is back, not "Added".

@@ -146,16 +146,25 @@ describe('addSkillMock / removeSkillMock — PUT/DELETE /api/me/skills/{id} cont
   })
 })
 
-describe('error envelope fixtures — exact shape match for docs/API.md', () => {
+describe('error envelope fixtures — exact shape match for the real backend contract', () => {
   it.each([
-    ['SKILL_NOT_FOUND', MOCK_SKILL_NOT_FOUND],
-    ['PROFILE_NOT_FOUND', MOCK_PROFILE_NOT_FOUND],
-    ['VALIDATION_ERROR', MOCK_VALIDATION_ERROR],
-    ['SERVICE_UNAVAILABLE', MOCK_SERVICE_UNAVAILABLE],
-  ])('%s has the { error: { code, message, details? } } envelope with the real contract code', (code, body) => {
-    expect(body.error.code).toBe(code)
+    ['not_found (resource: skill)', MOCK_SKILL_NOT_FOUND],
+    ['not_found (resource: profile)', MOCK_PROFILE_NOT_FOUND],
+    ['validation_failed', MOCK_VALIDATION_ERROR],
+    ['service_unavailable', MOCK_SERVICE_UNAVAILABLE],
+  ])('%s has the { error: { code, message, details? } } envelope', (_label, body) => {
+    expect(typeof body.error.code).toBe('string')
     expect(typeof body.error.message).toBe('string')
     expect(body.error.message.length).toBeGreaterThan(0)
+  })
+
+  it('disambiguates skill-not-found from profile-not-found by details.resource, not by code', () => {
+    // The real backend (backend/app/errors.py) reuses a single `not_found`
+    // code for both cases — there is no separate SKILL_NOT_FOUND code.
+    expect(MOCK_SKILL_NOT_FOUND.error.code).toBe('not_found')
+    expect(MOCK_PROFILE_NOT_FOUND.error.code).toBe('not_found')
+    expect(MOCK_SKILL_NOT_FOUND.error.details).toEqual({ resource: 'skill' })
+    expect(MOCK_PROFILE_NOT_FOUND.error.details).toEqual({ resource: 'profile' })
   })
 })
 
@@ -173,8 +182,9 @@ describe('createMockSkillsClient — async adapter over the synchronous mocks', 
     const client = createMockSkillsClient(MOCK_CONFIRMED_SKILLS)
     await expect(client.add(999_999)).rejects.toEqual({
       status: 404,
-      code: 'SKILL_NOT_FOUND',
+      code: 'not_found',
       message: MOCK_SKILL_NOT_FOUND.error.message,
+      details: { resource: 'skill' },
     })
   })
 })
