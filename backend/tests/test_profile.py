@@ -6,6 +6,7 @@ verification logic itself is covered in test_auth.py.
 """
 
 import asyncio
+import threading
 from collections.abc import Iterator
 from typing import Any
 from uuid import UUID, uuid4
@@ -100,6 +101,46 @@ def test_onboarding_is_safe_to_retry(store: InMemoryProfileStore) -> None:
     sign_out()
 
 
+def test_delayed_onboarding_retry_preserves_a_name_changed_by_patch(
+    store: InMemoryProfileStore,
+) -> None:
+    sign_in_as(ANA)
+    created = call("POST", "/api/me", {"full_name": "Ana Lim"}).json()["profile"]
+    edited = call("PATCH", "/api/me", {"full_name": "Ana Tan"}).json()
+
+    retried = call("POST", "/api/me", {"full_name": "Ana Lim"})
+
+    assert retried.status_code == 200
+    assert retried.json()["profile"] == {
+        **edited,
+        "created_at": created["created_at"],
+    }
+    sign_out()
+
+
+def test_concurrent_in_memory_onboarding_returns_one_winner(
+    store: InMemoryProfileStore,
+) -> None:
+    workers = 8
+    start = threading.Barrier(workers)
+    profiles: list = []
+
+    def onboard(worker: int) -> None:
+        start.wait(timeout=5)
+        profiles.append(store.upsert(ANA, f"Ana {worker}"))
+
+    threads = [threading.Thread(target=onboard, args=(worker,)) for worker in range(workers)]
+    for thread in threads:
+        thread.start()
+    for thread in threads:
+        thread.join(timeout=5)
+
+    assert len(profiles) == workers
+    assert len({profile.full_name for profile in profiles}) == 1
+    assert len({profile.created_at for profile in profiles}) == 1
+    assert len({profile.updated_at for profile in profiles}) == 1
+
+
 def test_name_whitespace_is_normalised(store: InMemoryProfileStore) -> None:
     sign_in_as(ANA)
     response = call("POST", "/api/me", {"full_name": "  Ana   Lim  "})
@@ -183,4 +224,30 @@ def test_user_id_in_the_body_is_ignored(store: InMemoryProfileStore) -> None:
     sign_in_as(ANA)
     response = call("POST", "/api/me", {"full_name": "Ana Lim", "user_id": str(uuid4())})
     assert response.json()["profile"]["user_id"] == str(ANA)
+    sign_out()
+
+
+def test_me_uses_the_injected_store_with_a_synthetic_database_url(
+    monkeypatch: pytest.MonkeyPatch,
+    store: InMemoryProfileStore,
+) -> None:
+    """An overridden store must keep profile reads isolated from SQL config."""
+    from app import config, sql_skills
+
+    monkeypatch.setenv("DATABASE_URL", "postgresql://synthetic.invalid/profile")
+    config.get_settings.cache_clear()
+
+    def fail_if_database_is_touched(*args: Any, **kwargs: Any) -> None:
+        raise AssertionError("isolated profile reads must not open a SQL connection")
+
+    monkeypatch.setattr(sql_skills, "get_pg_connection", fail_if_database_is_touched)
+    sign_in_as(ANA)
+    created = call("POST", "/api/me", {"full_name": "Ana Lim"})
+    assert created.status_code == 200
+
+    response = call("GET", "/api/me")
+
+    assert response.status_code == 200
+    assert response.json()["profile"]["full_name"] == "Ana Lim"
+    config.get_settings.cache_clear()
     sign_out()
