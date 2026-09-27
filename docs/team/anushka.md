@@ -83,3 +83,32 @@ still needs building before this is live (see next steps).
 5. Open an actual PR for this work. Checked the repo's open PRs directly:
    the only one (#1) is Jason's `seedskills` PR into `dev` — nothing has been
    opened for the skill editor yet.
+
+### 2026-09-26 — correcting the record: items 1 and 4 above are done
+
+The two entries above are now stale and could mislead anyone reading this
+log top-to-bottom without checking the branch directly, so: verified fresh
+(`git log`, `git clone --depth 1 -b anushka`, direct file inspection — not
+assumed from memory of an earlier session):
+
+- **Item 4 (merge `dev` into `anushka`) is done.** `f296eed "Merge pull
+  request #2 from anushka2503769/dev"` is on this branch.
+  `backend/app/routers/skills.py`, `sql_skills.py`, and the `not_found`/
+  `service_unavailable` error handling in `errors.py` are all present and
+  wired into `main.py` (`app.include_router(skills.router)`). This is real,
+  functioning backend code, not a stub — checked the actual file contents,
+  not just that the merge commit exists.
+- **Item 1 (the three shared-type/provider diffs) landed as part of that
+  same merge** and are confirmed present: `MeResponse.skills: Skill[]`,
+  `ApiErrorCode` includes `'service_unavailable'`, and
+  `ProfileProvider.reload` is `() => Promise<void>`.
+
+**Still genuinely open** (re-verified, not carried over from memory):
+- `.github/workflows/ci.yml` still has no `npm run test` step for the
+  frontend job — checked directly, the line isn't there. My earlier drafted
+  diff for this was handed over as a file but was never actually merged.
+- `<SkillEditor>` is still not mounted anywhere — still zero matches for
+  `SkillEditor` in `App.tsx` or `ProfileScreen.tsx`. Still Nasya's file
+  (profile shell), not touched here.
+- No PR into `dev` exists yet for the skill-editor frontend work itself
+  (`realClient.ts` + the `skillsApi` addition below) — opening one is next.

@@ -136,6 +136,12 @@ export interface Skill {
   name: string
 }
 
+/** GET /api/skills response shape (backend/app/schemas.py, jason/seedskills). */
+export interface SkillSearchResponse {
+  items: Skill[]
+  has_more: boolean
+}
+
 /** A skill the student has confirmed, as stored in SQL `user_skills`. */
 export interface UserSkill {
   skill_id: number

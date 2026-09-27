@@ -42,34 +42,38 @@ and a way to ask for a fresh one.
 | `confirmedSkills` | `UserSkill[]` | Whatever the shell currently has for the signed-in student. `SkillEditor` never mutates this itself — it only reads it to know what's already confirmed (so search results show "Added" instead of an Add button) and to render the confirmed-skills list with Remove buttons. |
 | `onProfileReload` | `() => Promise<void>` | Called after every successful add/remove. Must resolve only once fresh data has actually landed — see "Depends on" below for why this can't be fire-and-forget. |
 | `className` | `string?` | Optional, for shell layout hooks. No global CSS is touched — see `skill-editor.css`, scoped entirely under `.skill-editor__*`. |
-| `client` | `SkillsClient?` | Optional, defaults to a built-in mock (`mockSkillsClient` from `./client`). **This is the one thing that still needs a real implementation before this is live** — see "Still needed" below. |
+| `client` | `SkillsClient?` | Optional, defaults to a built-in mock (`mockSkillsClient` from `./client`). A real implementation now exists — see `realClient.ts` below. |
 
-## Depends on (both proposed, not yet merged — see PR to `dev`)
+## Depends on (both landed — merged via PR #2 from `dev`)
 
-1. **`MeResponse.skills: Skill[]`** on `types/api.ts` — so `profile.skills` in
-   the example above actually exists. Currently `MeResponse` only has
-   `{profile, onboarding_complete}`.
+1. **`MeResponse.skills: Skill[]`** on `types/api.ts` — `profile.skills` in
+   the example above is real now.
 2. **`ProfileContextValue.reload` promisified** to `() => Promise<void>` —
-   currently `() => void` (fire-and-forget). `SkillEditor` awaits this after
-   every write and only clears a row's pending state once it resolves; if it
-   rejects, the row shows "Saved, but your skill list could not be
-   refreshed" rather than claiming the write itself failed. A synchronous
-   `reload` can't support that distinction.
+   resolves after the fetch settles, rejects on genuine failure (not on "no
+   profile row yet", which stays a normal state, not an error).
 
-Both are drafted as ready-to-review diffs (see PR description / the two
-files directly: `frontend/src/types/api.ts`, `frontend/src/auth/ProfileProvider.tsx`).
-Full test suite (35 tests) and `npm run build` pass with both applied.
+Full test suite (44 tests) and `npm run build` pass with both in place —
+verified from a fresh clone, not carried over from an earlier check.
 
-## Still needed before this is live (not the shell's job — flagging so it's visible)
+## The real client — ready to use, not just proposed anymore
 
 `SkillEditor`'s `client` prop defaults to a mock (`mockSkillsClient`). A real
-adapter implementing the `SkillsClient` interface (`search`/`add`/`remove`)
-against `lib/api.ts`'s authenticated `request()` doesn't exist yet — that's
-the last piece before this talks to Jason's actual `/api/skills` and
-`/api/me/skills/{id}` endpoints instead of in-memory fixtures. Once it
-exists, wiring it in is a one-line prop:
+adapter now exists and talks to Jason's actual `/api/skills` and
+`/api/me/skills/{id}` endpoints (confirmed against
+`backend/app/routers/skills.py`, merged in via `dev`):
+
+```
+frontend/src/features/skills/realClient.ts
+```
+
+It goes through the shared `skillsApi` (`lib/api.ts`) — the same additive,
+`profileApi`-shaped helpers, not a second fetch layer — which itself calls
+the existing authenticated `request()`. Wiring it in is exactly the one-line
+prop swap it always was meant to be:
 
 ```tsx
+import { realSkillsClient } from '../features/skills/realClient'
+
 <SkillEditor
   confirmedSkills={profile?.skills ?? []}
   onProfileReload={reload}
@@ -77,7 +81,13 @@ exists, wiring it in is a one-line prop:
 />
 ```
 
-Nothing in `SkillEditor.tsx` itself needs to change for that swap.
+Nothing in `SkillEditor.tsx` itself changed for this swap — exactly as
+originally promised. 9 tests in `realClient.test.ts` cover this against a
+faked `fetch`, proving the full `realClient -> skillsApi -> request ->
+fetch` path round-trips correctly (query building, 204-with-no-body,
+error-envelope parsing) — not yet exercised against a real running server,
+since that needs an actual Postgres instance with seeded skill rows
+(flagging as blocked on environment access, not silently assumed to work).
 
 ## What NOT to do
 

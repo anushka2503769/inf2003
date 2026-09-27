@@ -10,67 +10,45 @@
  * hand-off artifact for that conversation, not a silent workaround.
  */
 
-import type { Skill, UserSkill } from '../../types/api'
-
-/* -------------------------------------------------------------------------- */
-/* PROPOSED SHARED CHANGES (types/api.ts, lib/api.ts) — not yet implemented    */
-/* -------------------------------------------------------------------------- */
+import type { SkillSearchResponse, UserSkill } from '../../types/api'
 
 /**
- * docs/API.md `GET /api/skills` returns `{ items, has_more }`, not the
- * cursor-based `Page<T>` already declared in `types/api.ts`. Proposing this
- * as a new named shape (`SkillSearchResponse`) rather than changing `Page<T>`,
- * since `Page<T>` may already be agreed for a different, cursor-based route.
- *
- * Proposed home: types/api.ts, alongside `Skill`.
+ * `SkillSearchResponse` now lives in `types/api.ts` (added alongside `Skill`)
+ * — it started as a proposal here and has since landed as a real shared
+ * type, confirmed against Jason's actual `GET /api/skills` response shape.
+ * Re-exported so existing imports of `SkillSearchResponse` from this file
+ * (mocks.ts, client.ts) keep working without a competing declaration.
  */
-export interface SkillSearchResponse {
-  items: Skill[]
-  has_more: boolean
-}
+export type { SkillSearchResponse }
 
 /**
- * `MeResponse` (types/api.ts) currently has no `skills` field. This is no
- * longer a guess: Jason's actual backend schema (backend/app/schemas.py,
- * jason/seedskills branch, merged into dev) already returns
- * `skills: list[Skill] = []` on `MeResponse` — the frontend shared type on
- * `dev` just hasn't been updated to match yet. `SkillEditor` needs this list
- * as its `confirmedSkills` prop.
- *
- * Proposed home: types/api.ts, as `MeResponse.skills` (matches backend
- * field name and placement exactly).
+ * `MeResponse.skills: Skill[]` has landed in `types/api.ts` — this used to be
+ * a proposed type here (`MeResponseWithSkills`) before it was confirmed and
+ * merged; removed now that the real thing exists. `SkillEditor`'s
+ * `confirmedSkills` prop should be sourced from `MeResponse.skills` directly.
  */
-export type MeResponseWithSkills = {
-  skills: UserSkill[]
-}
 
 /**
- * `ProfileProvider.reload()` today is `() => void` (bumps a token; the fetch
- * effect re-runs and there is no way for a caller to know when it settles).
- * My task doc calls for "an async profile-reload callback" — `SkillEditor`
- * needs to know when the post-write GET /api/me has actually landed, so it
- * can clear a row's pending state against fresh data rather than guessing
- * with a timeout. Proposing `reload(): Promise<void>` (resolves after the
- * fetch settles, rejects only if the fetch itself throws outside the
- * existing catch — i.e. practically never) replace the current signature.
- *
- * Proposed home: auth/ProfileProvider.tsx, `ProfileContextValue.reload`.
+ * `ProfileProvider.reload()` is now `() => Promise<void>` (auth/ProfileProvider.tsx)
+ * — this used to document a proposed signature change; it's landed. Resolves
+ * after the fetch settles, rejects on genuine failure, but not on "no
+ * profile row yet" (a normal state, not an error). `SkillEditor` depends on
+ * this to know when to clear a row's pending state against fresh data,
+ * rather than guessing with a timeout.
  */
 export type AsyncProfileReload = () => Promise<void>
 
 /**
  * `ApiErrorCode` (types/api.ts) is a lowercase union (`not_found`,
- * `validation_failed`, ...). An earlier draft of this feature assumed
- * docs/API.md's uppercase codes (`SKILL_NOT_FOUND`, `VALIDATION_ERROR`, ...)
- * were the real, current contract and flagged the lowercase union as stale.
- * That was wrong: checked against Jason's actual backend implementation
- * (backend/app/errors.py + routers/skills.py, merged into dev) and it uses
- * the lowercase codes, matching `ApiErrorCode` exactly — including reusing
- * a single `not_found` for both a missing profile and a missing skill,
- * disambiguated by `details.resource` rather than by separate codes.
- * `docs/API.md` is the document that's stale here, not the shared type.
- * See client.ts's `isMissingResource()` for the resource-disambiguation
- * helper this implies.
+ * `validation_failed`, `service_unavailable`, ...) matching the real backend
+ * exactly (backend/app/errors.py + routers/skills.py, merged into `dev` and
+ * now into `anushka`) — including reusing a single `not_found` for both a
+ * missing profile and a missing skill, disambiguated by `details.resource`
+ * rather than by separate codes. See client.ts's `isMissingResource()` for
+ * the resource-disambiguation helper this implies. (An earlier draft of this
+ * feature wrongly assumed docs/API.md's uppercase codes were current and
+ * flagged the lowercase union as stale — that was backwards; docs/API.md was
+ * the stale one.)
  */
 
 /* -------------------------------------------------------------------------- */
