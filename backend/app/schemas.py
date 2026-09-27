@@ -7,7 +7,7 @@ this copy is the one that is actually enforced.
 
 import re
 from datetime import datetime
-from typing import Annotated
+from typing import Annotated, Any
 from uuid import UUID
 
 from pydantic import BaseModel, Field, field_validator
@@ -64,6 +64,37 @@ class UpdateProfileRequest(BaseModel):
         return None if value is None else _validate_full_name(value)
 
 
+class Skill(BaseModel):
+    """An entry in the shared SQL skill dictionary."""
+
+    skill_id: int
+    name: str
+
+
+class SkillSearchResponse(BaseModel):
+    items: list[Skill]
+    has_more: bool
+
+
 class MeResponse(BaseModel):
     profile: Profile
+    # Always an array, empty for a student who has confirmed nothing yet. The
+    # skill editor re-reads GET /api/me after each change rather than keeping
+    # its own copy, so this is the single source of confirmed membership.
+    skills: list[Skill] = []
     onboarding_complete: bool
+
+
+class ExtractedData(BaseModel):
+    skills: list[str] = Field(default_factory=list)
+    education: list[dict[str, Any]] = Field(default_factory=list)
+    experience: list[dict[str, Any]] = Field(default_factory=list)
+    projects: list[dict[str, Any]] = Field(default_factory=list)
+
+
+class ResumeUploadResponse(BaseModel):
+    resume_id: str
+    user_id: str
+    file_name: str
+    uploaded_at: datetime
+    extracted_data: ExtractedData

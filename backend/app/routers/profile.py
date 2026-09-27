@@ -12,11 +12,20 @@ from fastapi import APIRouter, Depends, status
 from ..auth import CurrentUser
 from ..errors import ApiError
 from ..schemas import CreateProfileRequest, MeResponse, Profile, UpdateProfileRequest
-from ..store import ProfileStore, get_profile_store
+from ..store import ProfileSnapshot, ProfileStore, get_profile_store
 
 router = APIRouter(prefix="/api", tags=["profile"])
 
 Store = Annotated[ProfileStore, Depends(get_profile_store)]
+
+
+def _me(snapshot: ProfileSnapshot) -> MeResponse:
+    """Build the response from the store's aggregate read."""
+    return MeResponse(
+        profile=snapshot.profile,
+        skills=snapshot.skills,
+        onboarding_complete=_onboarding_complete(snapshot.profile),
+    )
 
 
 def _onboarding_complete(profile: Profile) -> bool:
@@ -35,8 +44,8 @@ def _onboarding_complete(profile: Profile) -> bool:
     responses={404: {"description": "Signed in, but onboarding has not run yet"}},
 )
 def read_me(user: CurrentUser, store: Store) -> MeResponse:
-    profile = store.get(user.user_id)
-    if profile is None:
+    snapshot = store.get_with_skills(user.user_id)
+    if snapshot is None:
         # A normal state for a first-time student, not a failure. The browser
         # sends them to onboarding when it sees this code.
         raise ApiError(
@@ -44,7 +53,7 @@ def read_me(user: CurrentUser, store: Store) -> MeResponse:
             "not_found",
             "You have not set up your profile yet.",
         )
-    return MeResponse(profile=profile, onboarding_complete=_onboarding_complete(profile))
+    return _me(snapshot)
 
 
 @router.post("/me", response_model=MeResponse, status_code=status.HTTP_200_OK)
@@ -55,8 +64,8 @@ def create_me(payload: CreateProfileRequest, user: CurrentUser, store: Store) ->
     a retry after a timeout succeeds instead of failing with a conflict the
     student cannot do anything about.
     """
-    profile = store.upsert(user.user_id, payload.full_name)
-    return MeResponse(profile=profile, onboarding_complete=_onboarding_complete(profile))
+    snapshot = store.upsert_with_skills(user.user_id, payload.full_name)
+    return _me(snapshot)
 
 
 @router.patch("/me", response_model=Profile)
