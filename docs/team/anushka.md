@@ -119,7 +119,7 @@ assumed from memory of an earlier session):
 ### WP-9 progress note (overnight 2026-10-26)
 
 - Branch: `feat/wp9-skill-gap-ui`
-- Commit: (filled in by orchestrator)
+- Commit: `9dabafb` (Codex build) + `52e053a` (review fix round); orchestrator re-ran checks on `52e053a`: npm test 59 passed, npm run build clean
 - Result: implemented role selection, sample-size and ranked skill display, confirmation-gated add-to-skills, retry/error states, and contract-shaped mock/real clients.
 - Frontend checks: `cd frontend && npm test && npm run build` — 55 tests passed across 5 files; TypeScript and Vite production build passed.
 - Backend regression checks (run by orchestrator with DB/environment variables unset): `uv run --locked ruff check .` — All checks passed; `uv run --locked ruff format --check .` — 51 files already formatted; `uv run --locked pytest` — 51 passed, 38 skipped in 10.60s (disposable DB integration tests skipped; no shared DB or `.env` used).
