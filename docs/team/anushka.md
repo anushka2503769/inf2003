@@ -116,3 +116,13 @@ assumed from memory of an earlier session):
   (profile shell), not touched here.
 - No PR into `dev` exists yet for the skill-editor frontend work itself
   (`realClient.ts` + the `skillsApi` addition below) — opening one is next.
+### WP-9 progress note (overnight 2026-10-26)
+
+- Branch: `feat/wp9-skill-gap-ui`
+- Commit: (filled in by orchestrator)
+- Result: implemented role selection, sample-size and ranked skill display, confirmation-gated add-to-skills, retry/error states, and contract-shaped mock/real clients.
+- Frontend checks: `cd frontend && npm test && npm run build` — 55 tests passed across 5 files; TypeScript and Vite production build passed.
+- Backend regression checks (run by orchestrator with DB/environment variables unset): `uv run --locked ruff check .` — All checks passed; `uv run --locked ruff format --check .` — 51 files already formatted; `uv run --locked pytest` — 51 passed, 38 skipped in 10.60s (disposable DB integration tests skipped; no shared DB or `.env` used).
+- Unverified: no live API/Supabase/Mongo integration; the active screen client intentionally uses synthetic mocks. `jarvis check` was unavailable (`zsh: command not found`); no governance files were changed.
+- Open questions: none within WP-9; switching to real service is pending backend integration on `dev`.
+- Real-client switch in `frontend/src/features/skill-gap/activeClient.ts:1`: replace `import { createDefaultSkillGapClient } from './client'` with `import { createRealSkillGapClient as createDefaultSkillGapClient } from './realClient'`.

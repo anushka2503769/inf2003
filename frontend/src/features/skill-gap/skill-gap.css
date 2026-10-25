@@ -1,0 +1,14 @@
+.skill-gap__role-label { font-weight: 600; }
+.skill-gap select { width: min(100%, 28rem); min-height: 2.75rem; padding: .55rem .75rem; border: 1px solid var(--rule); border-radius: .35rem; color: var(--ink); background: white; font: inherit; }
+.skill-gap__warning { padding: .65rem .8rem; border-left: 3px solid #b7791f; background: #fff8e7; }
+.skill-gap__summary { font-weight: 700; }
+.skill-gap__list { display: grid; gap: 1rem; margin: 0; padding: 0; list-style: none; }
+.skill-gap__row { padding: 1rem; border: 1px solid var(--rule); border-radius: .4rem; }
+.skill-gap__row-head { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: .5rem 1rem; }
+.skill-gap__bar { height: .65rem; margin-top: .6rem; overflow: hidden; border-radius: 99px; background: #e8e8e4; }
+.skill-gap__bar span { display: block; height: 100%; background: #4e7763; }
+.skill-gap__split, .skill-gap__experience { margin: .5rem 0 0; color: var(--muted, #555); font-size: .9rem; }
+.skill-gap__add { display: flex; flex-wrap: wrap; align-items: center; gap: .6rem 1rem; margin-top: .8rem; }
+.skill-gap__add label { display: flex; align-items: center; gap: .45rem; }
+.skill-gap__error { flex-basis: 100%; color: #9b2626; }
+.skill-gap button:focus-visible, .skill-gap select:focus-visible, .skill-gap input:focus-visible { outline: 3px solid #205d9b; outline-offset: 2px; }
