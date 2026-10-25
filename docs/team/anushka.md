@@ -120,7 +120,7 @@ assumed from memory of an earlier session):
 ### WP-8 progress note (overnight 2026-10-26)
 
 - Branch: `feat/wp8-vault-ui`.
-- commit: (filled in by orchestrator)
+- commit: `ac1a9a8` (Codex build) + `97d8d52` (review fix round); orchestrator re-ran checks on `97d8d52`: npm test 70 passed, npm run build clean
 - Result: Vault tracker screen, contract-shaped stateful mock, and real shared-transport adapter implemented. Current default remains MOCK.
 - Checks: `cd frontend && npm test` — 6 files, 58 tests passed. `cd frontend && npm run build` — TypeScript and Vite production build passed (94 modules transformed).
 - Unverified: no live WP-2/backend integration or manual browser walkthrough; no shared database or network calls were made.
@@ -131,7 +131,7 @@ assumed from memory of an earlier session):
 ### WP-8 fix round (2026-10-26)
 
 - Branch: `feat/wp8-vault-ui`.
-- commit: (filled in by orchestrator)
+- commit: `ac1a9a8` (Codex build) + `97d8d52` (review fix round); orchestrator re-ran checks on `97d8d52`: npm test 70 passed, npm run build clean
 - Findings 1–3 fixed: status changes on the last page step back and reload; page controls lock during writes; empty states use the filtered visible rows.
 - Finding 4 fixed: accessible inline confirmation supports Cancel, Remove, Escape, initial focus and focus return; DELETE failure leaves the row and confirmation open.
 - Findings 5–6 fixed: posting links require HTTP(S); inactive listings show “No longer listed” while status remains editable.
