@@ -56,7 +56,7 @@ Inspect current code before work. Append task/result/check/PR/next-step notes he
 
 ### WP-5 progress note (overnight 2026-10-26)
 
-- Branch: `feat/wp5-ingestion`; commit: (filled in by orchestrator).
+- Branch: `feat/wp5-ingestion`; commit: `ba15db5` (build) + `4b983fb` (review fix round); orchestrator re-ran checks on `4b983fb`: ruff clean, pytest 73 passed / 39 skipped / 1 xfailed, disposable DB 112 passed / 1 xfailed.
 - Built: normalizers now fill `location` (null instead of "Not specified"), `job_type`,
   `work_arrangement`, `source_posted_at`; upsert writes them, refreshes `last_seen_at`, keeps
   `first_seen_at` and reports inserted vs updated (`xmax = 0`); fetch-multi skips bad records
