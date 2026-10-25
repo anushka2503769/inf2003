@@ -51,7 +51,7 @@ Inspect current state before starting. Append task/result/check/PR/next-step not
 ### WP-7 progress note (overnight 2026-10-26)
 
 - Branch: `feat/wp7-discover-ui`
-- Commit: (filled in by orchestrator)
+- commit: (filled in by orchestrator)
 - Result: Discover feed UI, local mock and shared-transport real client adapter implemented; fresh independent review pending.
 - Checks: `cd frontend && npm test` — 5 files, 58 tests passed.
 - Checks: `cd frontend && npm run build` — TypeScript and Vite production build passed (95 modules).
@@ -60,3 +60,8 @@ Inspect current state before starting. Append task/result/check/PR/next-step not
 - Human steps: Zhihao independent review; switch to real client when the live Discover endpoint is integrated.
 - Open questions: none for WP-7 contract; reviewer findings pending.
 - Real-client switch: replace `export { mockDiscoverClient as discoverClient } from './mocks'` with `export { realDiscoverClient as discoverClient } from './realClient'`.
+
+### WP-7 fix round (2026-10-26)
+
+- Reviewer findings fixed: (1) filters/Check again/Try again are blocked while decision PUTs are pending, so a failed PUT always restores its card with a visible retry; (2) onProfileMissing guarded in its own try/catch after error/rollback state is set; (3) empty state hidden and "Saving your decision…" shown while PUTs are pending; (4) maxLength 100 on Location/Keyword plus a distinct validation_failed message; (5) 404 `job` drops the card with "This job is no longer available."; (6) real client PUT test asserts the URL; (7) focus moves to the next card, buttons named with the job title, aria-keyshortcuts on the first card; (8) "Open posting" only for http(s) URLs. Added tests for Change filters / Check again.
+- Checks: `cd frontend && npm test` — 5 files, 66 tests passed; `npm run build` — passed.

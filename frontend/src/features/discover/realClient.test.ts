@@ -24,12 +24,15 @@ describe('real Discover client', () => {
 
   it('sends the exact decision payload and maps coded errors with details', async () => {
     let init: RequestInit | undefined
-    vi.stubGlobal('fetch', async (_input: RequestInfo | URL, options?: RequestInit) => {
+    let url = ''
+    vi.stubGlobal('fetch', async (input: RequestInfo | URL, options?: RequestInit) => {
+      url = String(input)
       init = options
       return new Response(JSON.stringify({ error: { code: 'not_found', message: 'Profile missing', details: { resource: 'profile' } } }), { status: 404 })
     })
 
     await expect(createRealDiscoverClient().decide('job-1', 'SAVED')).rejects.toMatchObject({ code: 'not_found', details: { resource: 'profile' } })
+    expect(url.endsWith('/api/me/jobs/job-1')).toBe(true)
     expect(init?.method).toBe('PUT')
     expect(init?.body).toBe(JSON.stringify({ status: 'SAVED' }))
   })

@@ -5,6 +5,6 @@ export interface DiscoverClient {
   decide(jobId: string, status: DiscoverDecision): Promise<void>
 }
 
-// Real client switch: replace the next export with the following line.
+// Real client switch: replace this export with the exact line below.
 // export { realDiscoverClient as discoverClient } from './realClient'
 export { mockDiscoverClient as discoverClient } from './mocks'

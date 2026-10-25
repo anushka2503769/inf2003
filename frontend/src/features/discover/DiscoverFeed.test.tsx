@@ -121,7 +121,7 @@ describe('DiscoverFeed', () => {
     const client = makeClient({ decide })
     const user = userEvent.setup()
     renderFeed(client)
-    await user.click(await screen.findByRole('button', { name: 'Save' }))
+    await user.click(await screen.findByRole('button', { name: /^Save / }))
 
     expect(await screen.findByText('Not saved — retry')).toBeInTheDocument()
     expect(screen.getByRole('heading', { name: 'Junior Developer' })).toBeInTheDocument()
@@ -135,7 +135,7 @@ describe('DiscoverFeed', () => {
     const client = makeClient({ list: vi.fn(async () => ({ items: [{ ...noRequirements }], has_more: false })) })
     renderFeed(client)
     expect(await screen.findByText('No skill requirements were extracted for this job.')).toBeInTheDocument()
-    await userEvent.click(screen.getByRole('button', { name: 'Save' }))
+    await userEvent.click(screen.getByRole('button', { name: /^Save / }))
     expect(await screen.findByText('No more jobs for these filters')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Change filters' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Check again' })).toBeInTheDocument()
@@ -159,7 +159,7 @@ describe('DiscoverFeed', () => {
     renderFeed(client)
 
     await screen.findByRole('heading', { name: 'Test role 1' })
-    await userEvent.click(screen.getAllByRole('button', { name: 'Save' })[0])
+    await userEvent.click(screen.getAllByRole('button', { name: /^Save / })[0])
     expect(list).toHaveBeenCalledTimes(1)
     await act(async () => resolveDecision())
     await waitFor(() => expect(list).toHaveBeenCalledTimes(2))
@@ -187,7 +187,7 @@ describe('DiscoverFeed', () => {
     renderFeed(client)
     await screen.findByRole('heading', { name: 'Junior Developer' })
     await waitFor(() => expect(list).toHaveBeenCalledTimes(2))
-    await userEvent.click(screen.getByRole('button', { name: 'Save' }))
+    await userEvent.click(screen.getByRole('button', { name: /^Save / }))
     expect(await screen.findByRole('heading', { name: 'Next job' })).toBeInTheDocument()
     expect(list).toHaveBeenLastCalledWith({}, 0, 20)
     await act(async () => resolveOldPage({ items: [next], has_more: false }))
@@ -204,7 +204,7 @@ describe('DiscoverFeed', () => {
       .mockResolvedValueOnce({ items: [], has_more: false })
     renderFeed(makeClient({ list }))
     await screen.findByRole('heading', { name: 'Retry role 1' })
-    await userEvent.click(screen.getAllByRole('button', { name: 'Save' })[0])
+    await userEvent.click(screen.getAllByRole('button', { name: /^Save / })[0])
     expect(await screen.findByText('The server had a problem loading jobs. Try again in a moment.')).toBeInTheDocument()
     expect(screen.getByRole('heading', { name: 'Retry role 2' })).toBeInTheDocument()
     await userEvent.click(screen.getByRole('button', { name: 'Try loading more' }))
@@ -229,23 +229,104 @@ describe('DiscoverFeed', () => {
     expect(screen.queryByRole('heading', { name: 'Junior Developer' })).not.toBeInTheDocument()
   })
 
-  it('does not restore a failed decision into a newer filter result', async () => {
+  it('blocks filter changes while a decision is pending so a failed PUT stays visible', async () => {
     let rejectDecision!: (error: Error) => void
     const decision = new Promise<void>((_resolve, reject) => { rejectDecision = reject })
-    const current = { ...JOB, job: { ...JOB.job, job_id: '00000000-0000-4000-8000-000000000010', title: 'Current filter role' } }
-    const list = vi.fn<DiscoverClient['list']>()
-      .mockResolvedValueOnce({ items: [JOB], has_more: false })
-      .mockResolvedValueOnce({ items: [current], has_more: false })
+    const list = vi.fn<DiscoverClient['list']>(async () => ({ items: [JOB], has_more: false }))
     const user = userEvent.setup()
     renderFeed(makeClient({ list, decide: vi.fn(() => decision) }))
 
-    await user.click(await screen.findByRole('button', { name: 'Save' }))
-    await user.type(screen.getByLabelText('Location'), 'Remote')
-    await user.click(screen.getByRole('button', { name: 'Apply filters' }))
-    expect(await screen.findByRole('heading', { name: 'Current filter role' })).toBeInTheDocument()
+    await user.click(await screen.findByRole('button', { name: /^Save / }))
+    expect(screen.getByRole('button', { name: 'Apply filters' })).toBeDisabled()
+    expect(screen.queryByText('No more jobs for these filters')).not.toBeInTheDocument()
+    await user.type(screen.getByLabelText('Location'), 'Remote{Enter}')
+    expect(list).toHaveBeenCalledTimes(1)
+    expect(screen.getByLabelText('Current URL')).toHaveTextContent('')
+
     await act(async () => rejectDecision(new Error('offline')))
+    expect(await screen.findByText('Not saved — retry')).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'Junior Developer' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Apply filters' })).toBeEnabled()
+  })
+
+  it('does not fail or show the empty state when the profile reload itself rejects', async () => {
+    const reload = vi.fn(async () => { throw new Error('reload failed') })
+    const client = makeClient({ list: vi.fn(async () => { throw { code: 'not_found', details: { resource: 'profile' } } }) })
+    render(<MemoryRouter><DiscoverFeed client={client} onProfileMissing={reload} /></MemoryRouter>)
+    expect(await screen.findByText('Could not load jobs. Try again.')).toBeInTheDocument()
+    expect(screen.queryByText('No more jobs for these filters')).not.toBeInTheDocument()
+  })
+
+  it('rolls the card back when a decision fails even if the profile reload rejects', async () => {
+    const reload = vi.fn(async () => { throw new Error('reload failed') })
+    const decide = vi.fn(async () => { throw { status: 404, code: 'not_found', message: 'x', details: { resource: 'profile' } } })
+    render(<MemoryRouter><DiscoverFeed client={makeClient({ decide })} onProfileMissing={reload} /></MemoryRouter>)
+    await userEvent.click(await screen.findByRole('button', { name: /^Save / }))
+    expect(await screen.findByText('Not saved — retry')).toBeInTheDocument()
+    expect(reload).toHaveBeenCalledTimes(1)
+  })
+
+  it('hides the empty state and disables Check again while decisions are pending', async () => {
+    let resolveDecision!: () => void
+    const decide = vi.fn(() => new Promise<void>(resolve => { resolveDecision = resolve }))
+    renderFeed(makeClient({ decide }))
+    await userEvent.click(await screen.findByRole('button', { name: /^Save / }))
+    expect(screen.getByText('Saving your decision…')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Check again' })).not.toBeInTheDocument()
+    await act(async () => resolveDecision())
+    expect(await screen.findByRole('button', { name: 'Check again' })).toBeInTheDocument()
+  })
+
+  it('limits Location and Keyword to 100 characters and explains validation_failed', async () => {
+    const list = vi.fn<DiscoverClient['list']>()
+      .mockResolvedValueOnce({ items: [], has_more: false })
+      .mockRejectedValueOnce({ status: 422, code: 'validation_failed', message: 'bad', details: { field: 'q' } })
+    const user = userEvent.setup()
+    renderFeed(makeClient({ list }))
+    expect(screen.getByLabelText('Location')).toHaveAttribute('maxlength', '100')
+    expect(screen.getByLabelText('Keyword')).toHaveAttribute('maxlength', '100')
+    await user.type(screen.getByLabelText('Keyword'), 'x')
+    await user.click(screen.getByRole('button', { name: 'Apply filters' }))
+    expect(await screen.findByText(/Those filters are not valid/)).toBeInTheDocument()
+  })
+
+  it('drops a card whose job is no longer available instead of offering a retry', async () => {
+    const decide = vi.fn(async () => { throw { status: 404, code: 'not_found', message: 'gone', details: { resource: 'job' } } })
+    renderFeed(makeClient({ decide }))
+    await userEvent.click(await screen.findByRole('button', { name: /^Save / }))
+    expect(await screen.findByText('This job is no longer available.')).toBeInTheDocument()
+    expect(screen.queryByText('Not saved — retry')).not.toBeInTheDocument()
     expect(screen.queryByRole('heading', { name: 'Junior Developer' })).not.toBeInTheDocument()
-    expect(screen.getByRole('heading', { name: 'Current filter role' })).toBeInTheDocument()
+  })
+
+  it('moves focus to the next card and gives buttons job context', async () => {
+    const second = { ...JOB, job: { ...JOB.job, job_id: '00000000-0000-4000-8000-000000000002', title: 'Second role' } }
+    const client = makeClient({ list: vi.fn(async () => ({ items: [JOB, second], has_more: false })) })
+    renderFeed(client)
+    const save = await screen.findByRole('button', { name: 'Save Junior Developer' })
+    expect(save).toHaveAttribute('aria-keyshortcuts', 'ArrowRight')
+    expect(screen.getByRole('button', { name: 'Not interested in Junior Developer' })).toHaveAttribute('aria-keyshortcuts', 'ArrowLeft')
+    expect(screen.getByRole('button', { name: 'Save Second role' })).not.toHaveAttribute('aria-keyshortcuts')
+    await userEvent.click(save)
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Save Second role' })).toHaveFocus())
+  })
+
+  it('renders Open posting only for http(s) application URLs', async () => {
+    const unsafe = { ...JOB, job: { ...JOB.job, application_url: 'javascript:alert(1)' } }
+    renderFeed(makeClient({ list: vi.fn(async () => ({ items: [unsafe], has_more: false })) }))
+    await screen.findByRole('heading', { name: 'Junior Developer' })
+    expect(screen.queryByRole('link', { name: 'Open posting' })).not.toBeInTheDocument()
+  })
+
+  it('Change filters focuses the filter controls and Check again reloads the feed', async () => {
+    const list = vi.fn(async (): Promise<DiscoverResponse> => ({ items: [], has_more: false }))
+    const user = userEvent.setup()
+    renderFeed(makeClient({ list }))
+    await user.click(await screen.findByRole('button', { name: 'Change filters' }))
+    expect(screen.getByLabelText('Job type')).toHaveFocus()
+    expect(list).toHaveBeenCalledTimes(1)
+    await user.click(screen.getByRole('button', { name: 'Check again' }))
+    await waitFor(() => expect(list).toHaveBeenCalledTimes(2))
   })
 
   it('refreshes profile state when Discover reports a missing profile', async () => {

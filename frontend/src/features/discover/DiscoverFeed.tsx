@@ -26,6 +26,7 @@ function filtersFromParams(params: URLSearchParams): DiscoverFilters {
 
 function messageFor(error: unknown): string {
   const coded = error as Partial<DiscoverClientError> | null
+  if (coded?.code === 'validation_failed') return 'Those filters are not valid. Shorten the location or keyword (100 characters at most) and apply again.'
   if (coded?.code === 'network_error') return 'Cannot reach the server. Check your connection, then try again.'
   if (coded?.code === 'service_unavailable' || (coded?.status ?? 0) >= 500) return 'The server had a problem loading jobs. Try again in a moment.'
   return 'Could not load jobs. Try again.'
@@ -36,8 +37,18 @@ function isProfileMissing(error: unknown): boolean {
   return coded?.code === 'not_found' && coded.details?.resource === 'profile'
 }
 
-function JobCard({ entry, onDecision, pending, onRetry }: {
+function isJobGone(error: unknown): boolean {
+  const coded = error as Partial<DiscoverClientError> | null
+  return coded?.code === 'not_found' && coded.details?.resource === 'job'
+}
+
+function isHttpUrl(value: string): boolean {
+  return /^https?:\/\//i.test(value)
+}
+
+function JobCard({ entry, onDecision, pending, onRetry, first }: {
   entry: FeedEntry
+  first: boolean
   onDecision: (id: string, status: DiscoverDecision) => void
   pending: boolean
   onRetry: (entry: FeedEntry) => void
@@ -86,13 +97,13 @@ function JobCard({ entry, onDecision, pending, onRetry }: {
         </div>
       </div>
       <div className="discover-card__actions">
-        <button className="button button--quiet" type="button" disabled={pending} onClick={() => onDecision(job.job_id, 'NOT_INTERESTED')} aria-label="Not interested">← Not interested</button>
+        <button className="button button--quiet" type="button" disabled={pending} onClick={() => onDecision(job.job_id, 'NOT_INTERESTED')} aria-label={`Not interested in ${job.title}`} aria-keyshortcuts={first ? 'ArrowLeft' : undefined}>← Not interested</button>
         <div className="actions">
-          <a className="button button--quiet" href={job.application_url} target="_blank" rel="noopener noreferrer">Open posting</a>
-          <button className="button button--primary" type="button" disabled={pending} onClick={() => onDecision(job.job_id, 'SAVED')} aria-label="Save">Save →</button>
+          {isHttpUrl(job.application_url) && <a className="button button--quiet" href={job.application_url} target="_blank" rel="noopener noreferrer">Open posting</a>}
+          <button className="button button--primary" type="button" data-primary disabled={pending} onClick={() => onDecision(job.job_id, 'SAVED')} aria-label={`Save ${job.title}`} aria-keyshortcuts={first ? 'ArrowRight' : undefined}>Save →</button>
         </div>
       </div>
-      {entry.failedDecision && <p className="discover-card__retry" role="alert"><button type="button" className="button button--quiet" onClick={() => onRetry(entry)}>Not saved — retry</button></p>}
+      {entry.failedDecision && <p className="discover-card__retry" role="alert"><button type="button" data-retry className="button button--quiet" onClick={() => onRetry(entry)}>Not saved — retry</button></p>}
     </article>
   )
 }
@@ -112,6 +123,9 @@ export function DiscoverFeed({ client = discoverClient, onProfileMissing }: {
   const [loadingNext, setLoadingNext] = useState(false)
   const [hasMore, setHasMore] = useState(false)
   const [pendingIds, setPendingIds] = useState<Set<string>>(() => new Set())
+  const [notice, setNotice] = useState<string | null>(null)
+  const cardsRef = useRef<HTMLDivElement>(null)
+  const refocus = useRef(false)
   const requestId = useRef(0)
   const loadedCount = useRef(0)
   const decidedCount = useRef(0)
@@ -123,6 +137,21 @@ export function DiscoverFeed({ client = discoverClient, onProfileMissing }: {
 
   useEffect(() => setDraft(committed), [queryString]) // submitted URL is the source of truth
 
+  // A profile reload failure must never mask the state we already set, nor become an unhandled rejection.
+  const notifyProfileMissing = useCallback(async () => {
+    try { await onProfileMissing?.() } catch { /* the load/decision error is already shown */ }
+  }, [onProfileMissing])
+
+  // After a card is removed or restored, keep keyboard focus inside the feed.
+  useEffect(() => {
+    if (!refocus.current) return
+    refocus.current = false
+    const active = document.activeElement
+    if (active && active !== document.body && !cardsRef.current?.contains(active)) return
+    const target = cardsRef.current?.querySelector<HTMLElement>('[data-retry]') ?? cardsRef.current?.querySelector<HTMLElement>('[data-primary]:not(:disabled)')
+    target?.focus()
+  }, [entries])
+
   const loadFirst = useCallback(async () => {
     const id = ++requestId.current
     pageRequestId.current += 1
@@ -133,6 +162,7 @@ export function DiscoverFeed({ client = discoverClient, onProfileMissing }: {
     setLoading(true)
     setLoadError(null)
     setNextError(null)
+    setNotice(null)
     setLoadingNext(false)
     loadingPage.current = false
     setPendingIds(new Set())
@@ -147,12 +177,12 @@ export function DiscoverFeed({ client = discoverClient, onProfileMissing }: {
       setHasMore(response.has_more)
     } catch (error) {
       if (id !== requestId.current) return
-      if (isProfileMissing(error)) await onProfileMissing?.()
       setLoadError(messageFor(error))
+      if (isProfileMissing(error)) await notifyProfileMissing()
     } finally {
       if (id === requestId.current) setLoading(false)
     }
-  }, [client, committed])
+  }, [client, committed, notifyProfileMissing])
 
   useEffect(() => {
     void loadFirst()
@@ -178,8 +208,8 @@ export function DiscoverFeed({ client = discoverClient, onProfileMissing }: {
       setHasMore(response.has_more && unique.length > 0)
     } catch (error) {
       if (id === requestId.current && pageId === pageRequestId.current) {
-        if (isProfileMissing(error)) await onProfileMissing?.()
         setNextError(messageFor(error))
+        if (isProfileMissing(error)) await notifyProfileMissing()
       }
     } finally {
       if (pageId === pageRequestId.current) {
@@ -187,7 +217,7 @@ export function DiscoverFeed({ client = discoverClient, onProfileMissing }: {
         if (id === requestId.current) setLoadingNext(false)
       }
     }
-  }, [client, committed, hasMore, loading, onProfileMissing, pendingIds])
+  }, [client, committed, hasMore, loading, notifyProfileMissing, pendingIds])
 
   useEffect(() => {
     if (!loading && !loadError && !nextError && entries.length <= 3 && hasMore && pendingIds.size === 0) void loadNext()
@@ -205,26 +235,39 @@ export function DiscoverFeed({ client = discoverClient, onProfileMissing }: {
       setLoadingNext(false)
     }
     setPendingIds(ids => new Set(ids).add(id))
+    setNotice(null)
+    refocus.current = true
     setEntries(rows => rows.filter(row => row.item.job.job_id !== id))
     try {
       await client.decide(id, status)
       if (generation === requestId.current) decidedCount.current += 1
     } catch (error) {
       if (generation !== requestId.current) return
-      if (isProfileMissing(error)) await onProfileMissing?.()
-      setEntries(rows => {
-        if (rows.some(row => row.item.job.job_id === id)) return rows
-        const restored = [...rows]
-        restored.splice(Math.min(index, restored.length), 0, { item: entry.item, failedDecision: status })
-        return restored
-      })
+      if (isJobGone(error)) {
+        // Permanent failure: the job is no longer listed server-side, so retrying cannot succeed.
+        decidedCount.current += 1
+        setNotice('This job is no longer available.')
+      } else {
+        refocus.current = true
+        setEntries(rows => {
+          if (rows.some(row => row.item.job.job_id === id)) return rows
+          const restored = [...rows]
+          restored.splice(Math.min(index, restored.length), 0, { item: entry.item, failedDecision: status })
+          return restored
+        })
+        if (isProfileMissing(error)) await notifyProfileMissing()
+      }
     } finally {
       if (generation === requestId.current) setPendingIds(ids => { const next = new Set(ids); next.delete(id); return next })
     }
-  }, [client, onProfileMissing])
+  }, [client, notifyProfileMissing])
+
+  // Filters and reloads are blocked while decisions are in flight so a failed PUT can never be dropped silently.
+  const busyDeciding = pendingIds.size > 0
 
   const submitFilters = (event: FormEvent) => {
     event.preventDefault()
+    if (busyDeciding) return
     const params = new URLSearchParams()
     Object.entries(draft).forEach(([key, value]) => { if (value?.trim()) params.set(key, value.trim()) })
     setSearchParams(params)
@@ -250,7 +293,7 @@ export function DiscoverFeed({ client = discoverClient, onProfileMissing }: {
     document.getElementById('discover-job-type')?.focus()
   }
 
-  const checkAgain = () => { void loadFirst() }
+  const checkAgain = () => { if (!busyDeciding) void loadFirst() }
 
   return (
     <div className="discover" role="region" aria-label="Discover jobs">
@@ -271,20 +314,22 @@ export function DiscoverFeed({ client = discoverClient, onProfileMissing }: {
           </select>
         </label>
         <label className="field"><span className="field__label">Location</span>
-          <input className="field__input" aria-label="Location" value={draft.location ?? ''} onChange={event => setDraft(value => ({ ...value, location: event.target.value || undefined }))} />
+          <input className="field__input" aria-label="Location" maxLength={100} value={draft.location ?? ''} onChange={event => setDraft(value => ({ ...value, location: event.target.value || undefined }))} />
         </label>
         <label className="field"><span className="field__label">Keyword</span>
-          <input className="field__input" aria-label="Keyword" value={draft.q ?? ''} onChange={event => setDraft(value => ({ ...value, q: event.target.value || undefined }))} />
+          <input className="field__input" aria-label="Keyword" maxLength={100} value={draft.q ?? ''} onChange={event => setDraft(value => ({ ...value, q: event.target.value || undefined }))} />
         </label>
-        <button className="button button--primary" type="submit">Apply filters</button>
+        <button className="button button--primary" type="submit" disabled={busyDeciding}>Apply filters</button>
       </form>
       {loading && <p role="status" className="note">Loading jobs…</p>}
-      {!loading && loadError && <div className="discover__error" role="alert"><p>{loadError}</p><button className="button" type="button" onClick={checkAgain}>Try again</button></div>}
-      {!loading && !loadError && entries.length === 0 && !hasMore && !loadingNext && (
+      {!loading && loadError && <div className="discover__error" role="alert"><p>{loadError}</p><button className="button" type="button" disabled={busyDeciding} onClick={checkAgain}>Try again</button></div>}
+      {!loading && !loadError && entries.length === 0 && !hasMore && !loadingNext && !busyDeciding && (
         <section className="discover__empty" aria-live="polite"><h2 className="heading-2">No more jobs for these filters</h2><div className="actions"><button className="button button--quiet" type="button" onClick={changeFilters}>Change filters</button><button className="button button--primary" type="button" onClick={checkAgain}>Check again</button></div></section>
       )}
-      {!loadError && entries.length > 0 && <div className="discover__cards">{entries.map(entry => (
-        <JobCard key={entry.item.job.job_id} entry={entry} pending={pendingIds.has(entry.item.job.job_id)} onDecision={(id, status) => void decide(id, status)} onRetry={retry => void decide(retry.item.job.job_id, retry.failedDecision ?? 'SAVED')} />
+      {!loading && !loadError && entries.length === 0 && busyDeciding && <p role="status" className="note">Saving your decision…</p>}
+      {notice && <p role="status" className="note">{notice}</p>}
+      {!loadError && entries.length > 0 && <div className="discover__cards" ref={cardsRef}>{entries.map((entry, position) => (
+        <JobCard first={position === 0} key={entry.item.job.job_id} entry={entry} pending={pendingIds.has(entry.item.job.job_id)} onDecision={(id, status) => void decide(id, status)} onRetry={retry => void decide(retry.item.job.job_id, retry.failedDecision ?? 'SAVED')} />
       ))}</div>}
       {loadingNext && <p className="note" role="status">Loading more jobs…</p>}
       {nextError && <div className="discover__error" role="alert"><p>{nextError}</p><button className="button" type="button" onClick={() => void loadNext()}>Try loading more</button></div>}
