@@ -150,6 +150,58 @@ def test_update_after_job_deactivated_is_allowed(conn) -> None:
     )
 
 
+UPSERT = (
+    "INSERT INTO public.user_jobs (user_id, job_id, status) VALUES (%s, %s, %s) "
+    "ON CONFLICT (user_id, job_id) DO UPDATE SET status = EXCLUDED.status"
+)
+UPDATED_AT = "SELECT updated_at FROM public.user_jobs WHERE user_id = %s AND job_id = %s"
+
+
+def _upsert(connection, user_id: str, job_id: str, status: str) -> None:
+    with connection.cursor() as cur:
+        cur.execute(UPSERT, (user_id, job_id, status))
+
+
+def _deactivate(connection, job_id: str) -> None:
+    with connection.cursor() as cur:
+        cur.execute("UPDATE public.jobs SET is_active = false WHERE job_id = %s", (job_id,))
+
+
+def test_upsert_existing_row_of_deactivated_job_changes_status(conn) -> None:
+    user_id, job_id = _user(conn), _job(conn)
+    _track(conn, user_id, job_id, "SAVED")
+    original = _scalar(conn, UPDATED_AT, (user_id, job_id))
+    _deactivate(conn, job_id)
+    time.sleep(0.05)
+    _upsert(conn, user_id, job_id, "APPLIED")
+    status = _scalar(conn, "SELECT status FROM public.user_jobs WHERE user_id = %s", (user_id,))
+    assert status == "APPLIED"
+    assert _scalar(conn, UPDATED_AT, (user_id, job_id)) > original
+
+
+def test_upsert_same_status_on_deactivated_job_keeps_updated_at(conn) -> None:
+    user_id, job_id = _user(conn), _job(conn)
+    _track(conn, user_id, job_id, "SAVED")
+    original = _scalar(conn, UPDATED_AT, (user_id, job_id))
+    _deactivate(conn, job_id)
+    time.sleep(0.05)
+    _upsert(conn, user_id, job_id, "SAVED")
+    assert _scalar(conn, UPDATED_AT, (user_id, job_id)) == original
+
+
+def test_upsert_new_row_for_inactive_job_is_check_violation(conn) -> None:
+    user_id, job_id = _user(conn), _job(conn, active=False)
+    with pytest.raises(errors.CheckViolation) as excinfo:
+        _upsert(conn, user_id, job_id, "SAVED")
+    assert excinfo.value.pgcode == CHECK_VIOLATION
+
+
+def test_upsert_new_row_for_active_job_inserts(conn) -> None:
+    user_id, job_id = _user(conn), _job(conn)
+    _upsert(conn, user_id, job_id, "SAVED")
+    assert _scalar(conn, "SELECT count(*) FROM public.user_jobs") == 1
+
+
 # --- views ---------------------------------------------------------------
 
 

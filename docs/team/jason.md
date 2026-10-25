@@ -178,3 +178,12 @@ sign-in configured first.
 - Unverified: not run against Supabase. Human step for Jason: apply 003 to the shared
   Supabase project and record date and commit in `docs/DB/README.md` (not edited here).
 - Open questions: none.
+
+#### WP-1 fix round
+- `user_jobs_require_active_job()` now allows the insert when a `(user_id, job_id)` row already
+  exists, because PostgreSQL fires BEFORE INSERT triggers before detecting ON CONFLICT; the
+  WP-2 upsert on an existing row of a deactivated job previously raised 23514. New rows for
+  inactive jobs still fail with 23514. Concurrent DELETE plus upsert race is documented in the
+  SQL, not solved.
+- 003 was edited in place; it has not been applied to Supabase yet, so no new migration.
+- Regression tests added for the exact upsert statement; commit: (filled in by orchestrator).

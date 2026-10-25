@@ -39,6 +39,21 @@ RETURNS trigger
 LANGUAGE plpgsql
 AS $$
 BEGIN
+    -- PostgreSQL fires BEFORE INSERT row triggers before it detects an
+    -- ON CONFLICT, so an upsert (INSERT ... ON CONFLICT DO UPDATE) on an
+    -- existing tracker row would be rejected here even though it becomes an
+    -- UPDATE. If the (user_id, job_id) row already exists, let it through:
+    -- either it turns into the allowed update, or the primary key rejects it.
+    -- A genuinely new row for an inactive job still fails. Two concurrent first
+    -- inserts for an inactive job both fail (neither row exists). Known,
+    -- accepted race: a concurrent DELETE plus upsert could slip a row in; this
+    -- is documented rather than solved with locking.
+    IF EXISTS (
+        SELECT 1 FROM public.user_jobs
+        WHERE user_id = NEW.user_id AND job_id = NEW.job_id
+    ) THEN
+        RETURN NEW;
+    END IF;
     IF NOT EXISTS (
         SELECT 1 FROM public.jobs
         WHERE job_id = NEW.job_id AND is_active

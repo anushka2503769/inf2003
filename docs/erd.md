@@ -153,9 +153,10 @@ database objects only; no table or column changes, so the ER diagram above stays
 - **`user_jobs_requires_active_job`** is a `BEFORE INSERT` trigger on `user_jobs` (function
   `user_jobs_require_active_job()`). It is the project's non-standard integrity constraint:
   a CHECK cannot look at another table, so the trigger raises `check_violation` (SQLSTATE
-  23514) when the referenced job is missing or not `is_active`. Only inserts are guarded;
-  an existing tracker row whose job is deactivated later stays valid and can still be
-  updated.
+  23514) when the referenced job is missing or not `is_active`. Only genuinely new rows are
+  guarded: if a row for the same user and job already exists, the insert is let through
+  (PostgreSQL fires the trigger before it detects ON CONFLICT), so an upsert on an existing
+  row whose job was deactivated later still works as an update.
 - **`v_job_requirement_counts(job_id, required_total, preferred_total)`** counts each active
   job's `REQUIRED` and `PREFERRED` rows in `job_skills` using `COUNT(*) FILTER`. Inactive
   jobs, and jobs with no skill rows, do not appear. Discover ranking uses it.
