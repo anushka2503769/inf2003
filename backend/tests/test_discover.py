@@ -16,8 +16,8 @@ import httpx
 import pytest
 
 from app.auth import AuthenticatedUser, current_user
-from app.dependencies import get_authenticated_job_db
 from app.main import app
+from app.routers.discover import hold_job_read_lock
 from app.schemas import (
     DiscoverItem,
     DiscoverResponse,
@@ -137,11 +137,11 @@ def store(events: list[str]) -> Iterator[FakeStore]:
         events.append("unlock")
 
     app.dependency_overrides[get_discover_store] = lambda: fake
-    app.dependency_overrides[get_authenticated_job_db] = fake_job_lock
+    app.dependency_overrides[hold_job_read_lock] = fake_job_lock
     sign_in_as(ANA)
     yield fake
     app.dependency_overrides.pop(get_discover_store, None)
-    app.dependency_overrides.pop(get_authenticated_job_db, None)
+    app.dependency_overrides.pop(hold_job_read_lock, None)
     app.dependency_overrides.pop(current_user, None)
 
 
@@ -265,6 +265,10 @@ def test_no_profile_is_404_profile(store: FakeStore) -> None:
         ("q=" + "x" * 101, "q"),
         ("user_id=22222222-2222-4222-8222-222222222222", "user_id"),
         ("limlt=5", "limlt"),
+        ("q=%00", "q"),
+        ("q=data%00", "q"),
+        ("location=%00", "location"),
+        ("location=Singa%00pore", "location"),
     ],
 )
 def test_invalid_query_is_422(store: FakeStore, query: str, field: str) -> None:
@@ -278,3 +282,90 @@ def test_invalid_query_is_422(store: FakeStore, query: str, field: str) -> None:
 def test_limit_50_and_offset_10000_are_allowed(store: FakeStore) -> None:
     assert call("/api/discover?limit=50&offset=10000").status_code == 200
     assert store.calls[0][2:] == (50, 10000)
+
+
+# --- the real lock dependency (fake SQL connection, no Mongo) ---------------
+
+
+class _LockCursor:
+    def __init__(self, acquired: bool) -> None:
+        self.acquired = acquired
+        self.statements: list[str] = []
+
+    def execute(self, query, params=()):
+        self.statements.append(query)
+
+    def fetchone(self):
+        return (self.acquired,)
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *_):
+        return False
+
+
+class _LockConnection:
+    def __init__(self, acquired: bool) -> None:
+        self.cursor_obj = _LockCursor(acquired)
+        self.closed = False
+
+    def cursor(self):
+        return self.cursor_obj
+
+    def rollback(self):
+        pass
+
+    def close(self):
+        self.closed = True
+
+
+@pytest.fixture
+def real_lock(store: FakeStore, monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
+    """Use the real Discover lock dependency with MongoDB unconfigured."""
+    from app import config
+
+    app.dependency_overrides.pop(hold_job_read_lock, None)
+    monkeypatch.setenv("MONGODB_URI", "")
+    config.get_settings.cache_clear()
+    yield
+    config.get_settings.cache_clear()
+
+
+def test_real_lock_reaches_the_store_without_mongo(
+    real_lock: None, store: FakeStore, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from app import config
+
+    assert config.get_settings().mongodb_uri == ""
+    connection = _LockConnection(acquired=True)
+    monkeypatch.setattr("app.sql_access.get_pg_connection", lambda: connection)
+    response = call("/api/discover")
+    assert response.status_code == 200
+    assert len(store.calls) == 1
+    assert "advisory" in connection.cursor_obj.statements[0]
+    assert connection.closed
+
+
+def test_real_lock_busy_is_503(
+    real_lock: None, store: FakeStore, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    connection = _LockConnection(acquired=False)
+    monkeypatch.setattr("app.sql_access.get_pg_connection", lambda: connection)
+    response = call("/api/discover")
+    assert response.status_code == 503
+    assert error(response)["code"] == "service_unavailable"
+    assert store.calls == []
+
+
+def test_real_lock_unavailable_is_503(
+    real_lock: None, store: FakeStore, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    def no_database():
+        raise RuntimeError("DATABASE_URL is not set.")
+
+    monkeypatch.setattr("app.sql_access.get_pg_connection", no_database)
+    response = call("/api/discover")
+    assert response.status_code == 503
+    assert error(response)["code"] == "service_unavailable"
+    assert store.calls == []

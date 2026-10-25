@@ -196,13 +196,18 @@ sign-in configured first.
   `backend/app/routers/discover.py`, models appended to `schemas.py`, one router line in
   `main.py`, `backend/tests/test_discover.py` (fakes) and `backend/tests/test_discover_sql.py`
   (12-job synthetic fixture, expected order written literally).
-- The route holds the existing job read lock via `get_authenticated_job_db` (WP-0 makes it
-  shared). That dependency also opens the Mongo handle, so Discover needs `MONGODB_URI` set.
+- The route holds the job lock through its own dependency `hold_job_read_lock` in
+  `routers/discover.py`. It authenticates first, then holds `job_pipeline_lock()` without
+  opening MongoDB (Discover is SQL-only and works with `MONGODB_URI` unset); busy → 503.
+  WP-0 makes `job_pipeline_lock` an alias of the shared `job_read_lock`; after WP-0 merges
+  this could switch to `job_read_lock` explicitly.
+- Fix round (reviewer): the Mongo coupling above, and NUL characters in `q`/`location` are
+  now 422 `validation_failed` (they used to raise a plain 500 from psycopg2).
 - EXPLAIN: `docs/perf/discover-explain-fixture.txt`, regenerated with
   `WRITE_PERF_ARTIFACTS=1 bash backend/scripts/run_disposable_db_tests.sh`; without the
   variable the test only asserts the plan has an anti-join and a WindowAgg.
-- Checks: ruff check, ruff format --check pass; plain `pytest` 71 passed, 78 skipped;
-  `bash backend/scripts/run_disposable_db_tests.sh` 149 passed.
+- Checks (after fix round): ruff check, ruff format --check pass; plain `pytest` 78 passed, 78 skipped;
+  `bash backend/scripts/run_disposable_db_tests.sh` 156 passed.
 - Unverified: not run against Supabase or at WP-10 scale.
 - Open questions: `JobSummary` is also appended by WP-2; keep one copy on integration.
   `q` is case-insensitive (ILIKE) although API §7 only says "literal substring".
