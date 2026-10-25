@@ -81,7 +81,7 @@ These close the "still open" items of PRD v1. Change them only through Zhihao.
 | Topic | Decision |
 |---|---|
 | Extraction | Stay **rule-based** (dictionary regex + heuristics). No LLM in this build. Report it honestly as rule-based. |
-| Job provider | Use the three implemented keyless providers. Target 200–500 active jobs. |
+| Job provider | **Primary:** a one-off LinkedIn Singapore export via Apify (`backend/scripts/fetch_linkedin_apify.py`, ~13 role searches, ≤ US$2), imported from file. **Secondary:** the three implemented keyless providers. Target 200–500 active jobs. The report must state LinkedIn data was collected once via Apify for coursework only. |
 | Tracker statuses | `NOT_INTERESTED, SAVED, APPLIED, INTERVIEW, REJECTED, OFFER` (as in the SQL CHECK). |
 | Swipe persistence | **One immediate `PUT` per decision** with optimistic UI and a visible retry on failure. No browser batching, no offline queue. |
 | Requeue | `DELETE /api/me/jobs/{job_id}` removes a decision ("undo"), so the job can reappear in Discover. This is the tracker's D in CRUD. |
@@ -261,9 +261,24 @@ Branch `feat/wp5-ingestion`. Files: `backend/app/job_sources.py`, `backend/app/j
 3. `scripts/ingest_jobs.py --sources arbeitnow devitjobs_uk --limit-per-source 200` runs the
    same pipeline from the CLI using `backend/.env`, prints the summary, exits non-zero on
    total failure. Prefer internships / junior roles where the provider allows filtering.
+4. **LinkedIn file source (primary demo data).** Add source `linkedin_apify` that reads a
+   file produced by `backend/scripts/fetch_linkedin_apify.py` (already written, run by Zhihao):
+   `ingest_jobs.py --file data/raw/linkedin_sg_<date>.json`. The file is
+   `{source, actor, fetched_at, location, searches[], job_count, jobs[]}`; each job has
+   `id, url, title, companyName, location, postedAt, employmentType, seniorityLevel,
+   jobFunction, industries, applyUrl, descriptionText, descriptionHtml, search_keywords[]`.
+   Mapping: `external_job_id = id`; `application_url = applyUrl` if http(s), else `url`;
+   `company_name = companyName`; `source_posted_at = postedAt` (date, midnight UTC);
+   `job_type`: `INTERNSHIP` if `employmentType == "Internship"` or the title contains
+   "intern", else `FULL_TIME` / `PART_TIME` from `employmentType`, else null (Contract,
+   Temporary → null); `work_arrangement` from "remote"/"hybrid"/"on-site" wording in
+   location or description, else null; `raw_jd = descriptionText`. `industries` goes to the
+   existing `extracted_data.industry` field. The file path never makes a network call.
+   Write the parsing tests against a small synthetic fixture with the same shape
+   (`backend/tests/fixtures/linkedin_apify_sample.json`); never commit recruiter data.
 
 AC: unit tests with recorded provider fixtures (no network) cover each normalizer field,
-the skip-and-continue behaviour and the summary counts. **Running the script against the
+the LinkedIn file mapping (every rule above), the skip-and-continue behaviour and the summary counts. **Running the script against the
 shared databases is a human step** (Jiaxin/Jason) and its printed summary goes in the
 final report.
 
@@ -422,6 +437,7 @@ Files: `docs/USER_MANUAL.md`, `docs/README.md`, [API.md](API.md), [erd.md](erd.m
 ## 9. Non-goals
 
 Employer portals, internal or automatic applications, resume rewriting, interview coaching,
-salary or hiring predictions, LLM extraction, vector/semantic search, scraping LinkedIn/MCF,
+salary or hiring predictions, LLM extraction, vector/semantic search, live or scheduled scraping
+(the one-off Apify LinkedIn export in WP-5 is the only scraped source),
 message queues, background workers, microservices, real-time ingestion, account deletion,
 production deployment.
