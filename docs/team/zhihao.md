@@ -72,3 +72,15 @@ task/PR, integration checks and next milestone notes here without duplicating ev
   `{"status":"ok","service":"jobless-simulator-api"}`.
 - Unverified: not run against Supabase.
 - Open questions: none.
+
+#### WP-0 fix round
+
+- Added `get_admin_job_read_db` / `AdminJobReadDatabase` in `backend/app/dependencies.py`: admin
+  authorization first, then the shared read lock.
+- Open question for Zhihao: `GET /api/jobs/duplicates` (`backend/app/jobs_duplicates.py:117`) is
+  read-only but still uses the exclusive `AdminJobDatabase` (that file is outside WP-0). One-line
+  fix: change its parameter to `db: AdminJobReadDatabase` and import `AdminJobReadDatabase`
+  instead of `AdminJobDatabase` from `.dependencies` (keep the import for `delete_duplicates`).
+- Route-wiring test now enumerates every job route (jobs, search, duplicates, external multi,
+  extraction); the duplicates preview is a listed known exception. Mutating fetch-multi to the
+  read dependency made the test fail (verified, then restored).

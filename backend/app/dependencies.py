@@ -45,6 +45,19 @@ def get_authenticated_job_db(user: CurrentUser) -> Iterator[Database]:
         ) from exc
 
 
+def get_admin_job_read_db(
+    admin: Annotated[AuthenticatedUser, Depends(require_admin)],
+) -> Iterator[Database]:
+    """Authorize administration, then hold the shared job read lock (read-only admin routes)."""
+    try:
+        with job_read_lock():
+            yield get_db()
+    except SqlAccessError as exc:
+        raise ApiError(
+            503, "service_unavailable", "Job synchronization is temporarily unavailable."
+        ) from exc
+
+
 def get_admin_job_db(
     admin: Annotated[AuthenticatedUser, Depends(require_admin)],
 ) -> Iterator[Database]:
@@ -62,3 +75,4 @@ AuthenticatedDatabase = Annotated[Database, Depends(get_authenticated_db)]
 AdminDatabase = Annotated[Database, Depends(get_admin_db)]
 AuthenticatedJobDatabase = Annotated[Database, Depends(get_authenticated_job_db)]
 AdminJobDatabase = Annotated[Database, Depends(get_admin_job_db)]
+AdminJobReadDatabase = Annotated[Database, Depends(get_admin_job_read_db)]

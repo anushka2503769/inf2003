@@ -2,6 +2,7 @@
 
 import os
 from contextlib import contextmanager
+from types import SimpleNamespace
 from uuid import UUID
 
 import psycopg2
@@ -223,15 +224,18 @@ def test_read_dependency_takes_shared_and_admin_dependency_exclusive(recorded_lo
     assert recorded_locks == ["read", "write"]
 
 
-def test_read_and_admin_routes_are_wired_to_the_right_dependencies() -> None:
+def test_every_job_route_uses_the_right_lock_and_authorization() -> None:
     from fastapi.routing import APIRoute
 
-    def deps(path: str, method: str) -> set:
-        route = next(
-            r
-            for r in jobs.router.routes
-            if isinstance(r, APIRoute) and r.path == path and method in r.methods
-        )
+    from app import jobs_duplicates, jobs_extraction_router, jobs_search
+
+    read_deps = {dependencies.get_authenticated_job_db, dependencies.get_admin_job_read_db}
+    write_dep = dependencies.get_admin_job_db
+    # Known exception pending Zhihao: the read-only duplicates preview still uses the
+    # exclusive admin dependency; switching it to AdminJobReadDatabase completes WP-0.
+    pending_read_on_write = {("GET", "/api/jobs/duplicates")}
+
+    def collect(route: APIRoute) -> set:
         stack, found = [route.dependant], set()
         while stack:
             node = stack.pop()
@@ -239,10 +243,39 @@ def test_read_and_admin_routes_are_wired_to_the_right_dependencies() -> None:
             stack.extend(node.dependencies)
         return found
 
-    assert dependencies.get_authenticated_job_db in deps("/api/jobs/{job_id}", "GET")
-    assert dependencies.get_admin_job_db not in deps("/api/jobs/{job_id}", "GET")
-    assert dependencies.get_admin_job_db in deps("/api/jobs/{job_id}", "DELETE")
-    assert dependencies.get_authenticated_job_db not in deps("/api/jobs/{job_id}", "DELETE")
+    seen = set()
+    for module in (jobs, jobs_search, jobs_duplicates, jobs_external_multi, jobs_extraction_router):
+        for route in module.router.routes:
+            assert isinstance(route, APIRoute)
+            for method in route.methods:
+                key = (method, route.path)
+                seen.add(key)
+                found = collect(route)
+                if method == "GET" and key not in pending_read_on_write:
+                    assert found & read_deps and write_dep not in found, key
+                else:
+                    assert write_dep in found and not found & read_deps, key
+                if write_dep in found or dependencies.get_admin_job_read_db in found:
+                    assert dependencies.require_admin in found, key
+    assert ("POST", "/api/jobs/external/fetch-multi") in seen
+    assert ("POST", "/api/jobs/ingest") in seen
+    assert ("GET", "/api/jobs/search") in seen
+
+
+def test_admin_read_dependency_takes_shared_lock_and_requires_admin(recorded_locks) -> None:
+    user = AuthenticatedUser(user_id="00000000-0000-0000-0000-000000000001")
+    _drive(dependencies.get_admin_job_read_db, user)
+    assert recorded_locks == ["read"]
+    settings = SimpleNamespace(admin_user_ids=frozenset())
+    with pytest.raises(ApiError) as caught:
+        dependencies.require_admin(user, settings)
+    assert caught.value.status_code == 403
+    from fastapi.params import Depends
+
+    sig = dependencies.get_admin_job_read_db.__annotations__["admin"]
+    assert dependencies.require_admin in [
+        m.dependency for m in sig.__metadata__ if isinstance(m, Depends)
+    ]
 
 
 def test_lock_timeout_maps_to_503_service_unavailable(monkeypatch) -> None:
