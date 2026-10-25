@@ -51,7 +51,7 @@ Inspect current state before starting. Append task/result/check/PR/next-step not
 ### WP-7 progress note (overnight 2026-10-26)
 
 - Branch: `feat/wp7-discover-ui`
-- commit: (filled in by orchestrator)
+- commit: `daa3a36` (Codex build) + `1973e16` (review fix round); orchestrator re-ran checks on `1973e16`: npm test 66 passed, npm run build clean
 - Result: Discover feed UI, local mock and shared-transport real client adapter implemented; fresh independent review pending.
 - Checks: `cd frontend && npm test` — 5 files, 58 tests passed.
 - Checks: `cd frontend && npm run build` — TypeScript and Vite production build passed (95 modules).
