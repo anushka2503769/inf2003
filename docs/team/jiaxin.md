@@ -53,3 +53,22 @@ as part of JIA-01/02. Raise ambiguities in validators for team review.
 Initial status: JIA-01/02 not verified complete. The bootstrap has syntax/simulated-shell
 checks only; no deployment, live enforcement or Python document module is verified.
 Inspect current code before work. Append task/result/check/PR/next-step notes here.
+
+### WP-5 progress note (overnight 2026-10-26)
+
+- Branch: `feat/wp5-ingestion`; commit: (filled in by orchestrator).
+- Built: normalizers now fill `location` (null instead of "Not specified"), `job_type`,
+  `work_arrangement`, `source_posted_at`; upsert writes them, refreshes `last_seen_at`, keeps
+  `first_seen_at` and reports inserted vs updated (`xmax = 0`); fetch-multi skips bad records
+  and returns `summary`; `backend/scripts/ingest_jobs.py` (provider sources and
+  `--file` for the LinkedIn Apify export, no network for `--file`).
+- Checks: `ruff check`, `ruff format --check`, `pytest` (64 passed, 39 skipped without a
+  database) and `bash backend/scripts/run_disposable_db_tests.sh` (103 passed).
+- Unverified: not run against Supabase/MongoDB or the real LinkedIn export. Human step, from
+  `backend/`: `uv run --env-file .env python scripts/ingest_jobs.py --file ../data/raw/linkedin_sg_<date>.json`
+  then `uv run --env-file .env python scripts/ingest_jobs.py --sources arbeitnow devitjobs_uk --limit-per-source 200`;
+  paste the printed summary into the report. DevITjobs and AI Dev Jobs date/type field names are
+  best guesses (their payloads are only partly documented); check the first live summary.
+- Exit code: 1 when nothing was inserted or updated and there was an error (or no jobs were found),
+  or on an unrecoverable exception; 0 otherwise (partial failures still print their errors).
+- Open question: `API.md` section 9 now documents `summary` (shape change). See the report.
