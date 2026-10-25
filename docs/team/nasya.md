@@ -47,3 +47,16 @@ login backend or rewrite Anuska's skill component. Future Discover work needs a 
 
 Initial status: NAS-01/02 not verified complete; only the starter App and health call exist.
 Inspect current state before starting. Append task/result/check/PR/next-step notes here.
+
+### WP-7 progress note (overnight 2026-10-26)
+
+- Branch: `feat/wp7-discover-ui`
+- Commit: (filled in by orchestrator)
+- Result: Discover feed UI, local mock and shared-transport real client adapter implemented; fresh independent review pending.
+- Checks: `cd frontend && npm test` — 5 files, 58 tests passed.
+- Checks: `cd frontend && npm run build` — TypeScript and Vite production build passed (95 modules).
+- Checks: the real-client export switch was selected temporarily and `npm run build` passed; mock export restored afterward.
+- Unverified: live backend/API, Supabase, MongoDB, browser visual review, and integrated profile-not-found redirect.
+- Human steps: Zhihao independent review; switch to real client when the live Discover endpoint is integrated.
+- Open questions: none for WP-7 contract; reviewer findings pending.
+- Real-client switch: replace `export { mockDiscoverClient as discoverClient } from './mocks'` with `export { realDiscoverClient as discoverClient } from './realClient'`.
