@@ -298,3 +298,19 @@ def test_ties_on_updated_at_order_by_job_id() -> None:
         conn.close()
     items = call("GET", "/api/me/jobs").json()["items"]
     assert [i["job"]["job_id"] for i in items] == jobs
+
+
+def test_foreign_key_constraint_names_match_the_classifier() -> None:
+    """The classifier keys on these names; fail loudly if the schema renames them."""
+    from app.sql_tracker import _FK_JOB, _FK_USER
+
+    conn = _open()
+    try:
+        with conn.cursor() as cursor:
+            cursor.execute(
+                "SELECT conname FROM pg_constraint"
+                " WHERE conrelid = 'public.user_jobs'::regclass AND contype = 'f'"
+            )
+            assert {row[0] for row in cursor.fetchall()} == {_FK_USER, _FK_JOB}
+    finally:
+        conn.close()

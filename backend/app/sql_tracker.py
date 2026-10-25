@@ -83,6 +83,26 @@ def _item(row: tuple) -> TrackerItem:
     )
 
 
+# Default names Postgres gave the inline REFERENCES in docs/DB/001_initial_schema.sql.
+_FK_USER = "user_jobs_user_id_fkey"
+_FK_JOB = "user_jobs_job_id_fkey"
+
+
+def classify_put_failure(exc: psycopg2.Error) -> str | None:
+    """Classify a failed PUT from the original error, never a later re-read.
+
+    Returns "profile" or "job" for the two foreign keys (by constraint name),
+    "trigger" for the active-job trigger's 23514 (it carries no constraint
+    name), and None for anything else (e.g. the status CHECK).
+    """
+    name = exc.diag.constraint_name
+    if isinstance(exc, errors.ForeignKeyViolation):
+        return {_FK_USER: "profile", _FK_JOB: "job"}.get(name)
+    if isinstance(exc, errors.CheckViolation) and not name:
+        return "trigger"
+    return None
+
+
 def _profile_exists(cursor, user_id: UUID) -> bool:
     cursor.execute("SELECT 1 FROM public.users WHERE user_id = %s", (str(user_id),))
     return cursor.fetchone() is not None
@@ -134,14 +154,19 @@ class SqlTrackerStore:
                 return _item(row)
             except (errors.ForeignKeyViolation, errors.CheckViolation) as exc:
                 conn.rollback()
-                # A CHECK on the status column carries a constraint name; the
-                # active-job trigger's error has none. Only the latter is ours.
-                if isinstance(exc, errors.CheckViolation) and exc.diag.constraint_name:
-                    raise
-                with conn.cursor() as cursor:
-                    if not _profile_exists(cursor, user_id):
-                        raise TrackerProfileMissing from exc
-                raise TrackerJobMissing from exc
+                kind = classify_put_failure(exc)
+                if kind == "profile":
+                    raise TrackerProfileMissing from exc
+                if kind == "job":
+                    raise TrackerJobMissing from exc
+                if kind == "trigger":
+                    # The active-job trigger fires before the user FK, so a
+                    # caller with no profile hits it first: profile wins.
+                    with conn.cursor() as cursor:
+                        if not _profile_exists(cursor, user_id):
+                            raise TrackerProfileMissing from exc
+                    raise TrackerJobMissing from exc
+                raise
         except psycopg2.Error as exc:
             conn.rollback()
             raise SqlAccessError("Your tracker could not be saved; nothing was written.") from exc

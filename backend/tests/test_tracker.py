@@ -229,3 +229,44 @@ def test_store_only_receives_the_verified_user_id(store: FakeStore) -> None:
     call("DELETE", f"/api/me/jobs/{uuid4()}")
     assert store.calls
     assert all(call_[1] == ANA for call_ in store.calls)
+
+
+def test_put_and_delete_reject_unknown_query_parameters(store: FakeStore) -> None:
+    put = call("PUT", f"/api/me/jobs/{JOB}?unexpected=1", {"status": "SAVED"})
+    delete = call("DELETE", f"/api/me/jobs/{JOB}?unexpected=1")
+    for response in (put, delete):
+        assert response.status_code == 422
+        assert response.json()["error"]["details"] == {"field": "unexpected"}
+    assert store.calls == []
+
+
+def _pg_error(cls: type, constraint: str | None) -> Exception:
+    """A psycopg2-style error whose diag reports the given constraint name."""
+
+    class Diag:
+        constraint_name = constraint
+
+    class Error(cls):  # type: ignore[valid-type, misc]
+        diag = Diag()
+
+    return Error("synthetic")
+
+
+@pytest.mark.parametrize(
+    ("cls_name", "constraint", "expected"),
+    [
+        ("ForeignKeyViolation", "user_jobs_user_id_fkey", "profile"),
+        ("ForeignKeyViolation", "user_jobs_job_id_fkey", "job"),
+        ("ForeignKeyViolation", "something_else", None),
+        ("CheckViolation", None, "trigger"),
+        ("CheckViolation", "user_jobs_status_check", None),
+    ],
+)
+def test_classify_put_failure_uses_the_original_constraint(
+    cls_name: str, constraint: str | None, expected: str | None
+) -> None:
+    from psycopg2 import errors
+
+    from app.sql_tracker import classify_put_failure
+
+    assert classify_put_failure(_pg_error(getattr(errors, cls_name), constraint)) == expected

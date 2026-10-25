@@ -54,8 +54,9 @@ def _profile_missing() -> ApiError:
 
 @router.put("/me/jobs/{job_id}", response_model=TrackerItem)
 def put_tracker_job(
-    job_id: UUID, body: TrackerPutRequest, user: CurrentUser, store: Store
+    request: Request, job_id: UUID, body: TrackerPutRequest, user: CurrentUser, store: Store
 ) -> TrackerItem:
+    _reject_unknown_parameters(request, set())
     try:
         return store.put(user.user_id, job_id, body.status)
     except TrackerProfileMissing:
@@ -87,7 +88,8 @@ def list_tracker_jobs(
 
 
 @router.delete("/me/jobs/{job_id}", status_code=status.HTTP_204_NO_CONTENT)
-def delete_tracker_job(job_id: UUID, user: CurrentUser, store: Store) -> Response:
+def delete_tracker_job(request: Request, job_id: UUID, user: CurrentUser, store: Store) -> Response:
+    _reject_unknown_parameters(request, set())
     try:
         store.delete(user.user_id, job_id)
     except TrackerProfileMissing:

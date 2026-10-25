@@ -205,3 +205,12 @@ sign-in configured first.
 - Unverified: not run against Supabase. Human step for Jason: apply migration 003 to the shared
   Supabase project before merging this branch (the route relies on its trigger and view).
 - Open questions: should GET list/summary return 404 `profile` when there is no profile?
+
+#### WP-2 fix round
+
+- `PUT`/`DELETE` now reject unknown query parameters (422) before touching the store.
+- A failed `PUT` is classified by the original error: user FK -> profile, job FK -> job (by
+  constraint name, pinned by a disposable-DB test); only the trigger's 23514 re-checks the profile.
+- Once WP-1's trigger fix (row-exists pass-through) merges, `PUT` could be simplified to the
+  bare `INSERT ... ON CONFLICT DO UPDATE`; the CTE is correct under both trigger versions.
+- Checks: ruff check, ruff format --check pass; pytest 77 passed, 61 skipped; disposable DB 138 passed.
