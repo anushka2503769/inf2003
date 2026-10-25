@@ -34,7 +34,13 @@ export function SkillGapScreen({ client = skillGapClient }: { client?: SkillGapC
   const [addErrors, setAddErrors] = useState<Record<number, string>>({})
   const [addSuccess, setAddSuccess] = useState<Record<number, boolean>>({})
   const generation = useRef(0)
+  const confirmedSkillIds = useRef(new Set<number>())
   const gapRef = useRef<SkillGapResponse | null>(null)
+  function withConfirmedSkills(response: SkillGapResponse): SkillGapResponse {
+    const skills = response.skills.map(skill => confirmedSkillIds.current.has(skill.skill_id) ? { ...skill, user_has: true } : skill)
+    const user_has_in_top_n = skills.slice(0, response.summary.top_n).filter(skill => skill.user_has).length
+    return { ...response, skills, summary: { ...response.summary, user_has_in_top_n } }
+  }
   gapRef.current = gap
 
   async function loadRoles() {
@@ -57,7 +63,8 @@ export function SkillGapScreen({ client = skillGapClient }: { client?: SkillGapC
     setGapLoading(true)
     client.forRole(role, controller.signal).then(result => {
       if (requestId !== generation.current) return
-      setGap(result); gapRef.current = result
+      const current = withConfirmedSkills(result)
+      setGap(current); gapRef.current = current
     }).catch(cause => {
       if (requestId === generation.current) { setGapError(displayError(cause)); setGapProfileMissing(isProfileMissing(cause)) }
     }).finally(() => {
@@ -73,23 +80,25 @@ export function SkillGapScreen({ client = skillGapClient }: { client?: SkillGapC
     setPending(skill.skill_id); setAddErrors(current => ({ ...current, [skill.skill_id]: '' }))
     try {
       await client.add(skill.skill_id)
-      if (generation.current !== requestId || role !== targetRole) return
-      setAddSuccess(current => ({ ...current, [skill.skill_id]: true }))
+      confirmedSkillIds.current.add(skill.skill_id)
+      if (generation.current === requestId) {
+        setAddSuccess(current => ({ ...current, [skill.skill_id]: true }))
+      }
       const current = gapRef.current
-      if (current?.role_category === targetRole) {
-        const skills = current.skills.map(item => item.skill_id === skill.skill_id ? { ...item, user_has: true } : item)
-        const user_has_in_top_n = skills.slice(0, current.summary.top_n).filter(item => item.user_has).length
-        const updated = { ...current, skills, summary: { ...current.summary, user_has_in_top_n } }
+      if (current) {
+        const updated = withConfirmedSkills(current)
         setGap(updated); gapRef.current = updated
       }
-      // Reconcile with server after the successful 204. A refresh failure does
-      // not undo the confirmed local state or claim that the PUT failed.
-      try {
-        const refreshed = await client.forRole(targetRole)
-        if (generation.current === requestId && role === targetRole) { setGap(refreshed); gapRef.current = refreshed }
-      } catch { /* keep the successful PUT reflected in local state */ }
+      // Reconcile the active role only. Every response overlays successful
+      // additions so an older GET cannot undo a confirmed membership.
+      if (generation.current === requestId) {
+        try {
+          const refreshed = withConfirmedSkills(await client.forRole(targetRole))
+          if (generation.current === requestId) { setGap(refreshed); gapRef.current = refreshed }
+        } catch { /* keep the successful PUT reflected in local state */ }
+      }
     } catch (cause) {
-      if (generation.current === requestId && role === targetRole) setAddErrors(current => ({ ...current, [skill.skill_id]: displayError(cause) }))
+      if (generation.current === requestId) setAddErrors(current => ({ ...current, [skill.skill_id]: displayError(cause) }))
     } finally {
       if (generation.current === requestId) setPending(null)
     }
@@ -99,18 +108,17 @@ export function SkillGapScreen({ client = skillGapClient }: { client?: SkillGapC
     <section className="stack">
       <h1 className="heading-1">Skill Gap</h1>
       <hr className="rule rule--heavy" />
-      <label className="skill-gap__role-label" htmlFor="skill-gap-role">Target role</label>
-      {rolesLoading ? <p role="status">Loading roles…</p> : rolesError ? <div className="stack-sm"><InlineError>{rolesError}</InlineError>{rolesProfileMissing ? <Link to={routes.welcome}>Start onboarding</Link> : null}<button className="button" type="button" onClick={() => void loadRoles()}>Retry roles</button></div> : roles.length === 0 ? <p>No roles have active postings yet.</p> : <select id="skill-gap-role" aria-label="Target role" value={role} onChange={event => setRole(event.target.value)}>
+      {rolesLoading ? <p role="status">Loading roles…</p> : rolesError ? <div className="stack-sm"><InlineError>{rolesError}</InlineError>{rolesProfileMissing ? <Link to={routes.welcome}>Start onboarding</Link> : null}<button className="button" type="button" onClick={() => void loadRoles()}>Retry roles</button></div> : roles.length === 0 ? <p>No roles have active postings yet.</p> : <><label className="skill-gap__role-label" htmlFor="skill-gap-role">Target role</label><select id="skill-gap-role" aria-label="Target role" value={role} onChange={event => setRole(event.target.value)}>
         {roles.map(item => <option key={item.role_category} value={item.role_category}>{item.role_category} ({item.job_count})</option>)}
-      </select>}
+      </select></>}
     </section>
-    {role && <section className="stack" aria-live="polite">
+    {role && <section className="stack">
       {gapLoading && !gap ? <p role="status">Loading skill gaps…</p> : null}
-      {gapError ? <div className="stack-sm"><InlineError>{gapError}</InlineError>{gapProfileMissing ? <Link to={routes.welcome}>Start onboarding</Link> : null}<button className="button" type="button" onClick={() => { setGapError(null); setGapLoading(true); const id = ++generation.current; client.forRole(role).then(result => { if (generation.current === id) { setGap(result); gapRef.current = result } }).catch(error => { if (generation.current === id) { setGapError(displayError(error)); setGapProfileMissing(isProfileMissing(error)) } }).finally(() => { if (generation.current === id) setGapLoading(false) }) }}>Retry skill gaps</button></div> : null}
+      {gapError ? <div className="stack-sm"><InlineError>{gapError}</InlineError>{gapProfileMissing ? <Link to={routes.welcome}>Start onboarding</Link> : null}<button className="button" type="button" onClick={() => { setGapError(null); setGapLoading(true); const id = ++generation.current; client.forRole(role).then(result => { if (generation.current === id) { const current = withConfirmedSkills(result); setGap(current); gapRef.current = current } }).catch(error => { if (generation.current === id) { setGapError(displayError(error)); setGapProfileMissing(isProfileMissing(error)) } }).finally(() => { if (generation.current === id) setGapLoading(false) }) }}>Retry skill gaps</button></div> : null}
       {gap && <>
         <h2 className="heading-2">Based on {gap.sample_size} active postings for {gap.role_category}</h2>
         {gap.sample_size < 5 ? <p className="skill-gap__warning" role="status">Small sample: fewer than 5 active postings. Skill frequencies may be less representative.</p> : null}
-        <p className="skill-gap__summary">You have {gap.summary.user_has_in_top_n} of the top 10 skills for this role.</p>
+        {gap.skills.length > 0 ? <p className="skill-gap__summary" aria-live="polite">You have {gap.summary.user_has_in_top_n} of the top {gap.summary.top_n} skills for this role.</p> : null}
         {gap.skills.length === 0 ? <p>No skill requirements are available for this role yet.</p> : <ol className="skill-gap__list">
           {gap.skills.map(skill => <li className="skill-gap__row" key={skill.skill_id}>
             <div className="skill-gap__row-head"><strong>{skill.name}</strong><span>{skill.job_count} / {gap.sample_size} postings · {gap.sample_size ? `${Math.round(skill.frequency * 100)}%` : '0%'}</span><span>{skill.user_has ? '✓ You have this' : 'Gap'}</span></div>

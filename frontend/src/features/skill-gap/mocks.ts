@@ -3,7 +3,7 @@ import type { SkillGapClient, SkillGapClientError, SkillGapResponse, SkillGapRol
 export const MOCK_ROLES: SkillGapRolesResponse = { items: [
   { role_category: 'Software Engineering', job_count: 12 },
   { role_category: 'Data Science', job_count: 4 },
-  { role_category: 'Unclassified', job_count: 0 },
+  { role_category: 'Unclassified', job_count: 2 },
 ] }
 
 const fixtures: Record<string, SkillGapResponse> = {
@@ -16,7 +16,7 @@ const fixtures: Record<string, SkillGapResponse> = {
     ], summary: { top_n: 3, user_has_in_top_n: 1 },
   },
   'Data Science': { role_category: 'Data Science', sample_size: 4, skills: [{ skill_id: 4, name: 'Statistics', job_count: 3, frequency: .75, required_count: 2, preferred_count: 1, max_minimum_years: null, years_mentions: 0, user_has: false }], summary: { top_n: 1, user_has_in_top_n: 0 } },
-  Unclassified: { role_category: 'Unclassified', sample_size: 0, skills: [], summary: { top_n: 0, user_has_in_top_n: 0 } },
+  Unclassified: { role_category: 'Unclassified', sample_size: 2, skills: [{ skill_id: 5, name: 'TypeScript', job_count: 1, frequency: .5, required_count: 1, preferred_count: 0, max_minimum_years: null, years_mentions: 0, user_has: false }], summary: { top_n: 1, user_has_in_top_n: 0 } },
 }
 
 const copy = <T,>(value: T): T => structuredClone(value)

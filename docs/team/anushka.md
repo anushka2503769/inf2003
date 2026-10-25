@@ -126,3 +126,12 @@ assumed from memory of an earlier session):
 - Unverified: no live API/Supabase/Mongo integration; the active screen client intentionally uses synthetic mocks. `jarvis check` was unavailable (`zsh: command not found`); no governance files were changed.
 - Open questions: none within WP-9; switching to real service is pending backend integration on `dev`.
 - Real-client switch in `frontend/src/features/skill-gap/activeClient.ts:1`: replace `import { createDefaultSkillGapClient } from './client'` with `import { createRealSkillGapClient as createDefaultSkillGapClient } from './realClient'`.
+- WP-9 follow-up review fix: successful skill adds now reconcile membership across role changes and overlay later role GET responses; regression tests `keeps a successfully added skill confirmed when the selected role also contains it` and `overlays a successful add on a role GET that resolves afterward` passed. Latest frontend check: 57 tests passed across 5 files; build passed.
+
+### WP-9 fix round (overnight 2026-10-26)
+
+- Findings fixed: summary now uses API `top_n` and is hidden for empty skills; zero-sample rows render a safe 0%; role/gap retry tests now fail once then recover; default `Unclassified` fixture has a positive posting count and matching sample; removed captured `role === targetRole` comparisons while retaining generation guards; role label only renders with its select and results are no longer one broad live region.
+- Regressions: `uses the API top_n in the summary for three and ten skills, and hides it for zero`; `renders a zero-sample skill as 0% without invalid values and hides summary for an empty result`; `retries role and gap errors and renders recovered data`; `shows roles with counts, ranked details, bar, experience and sample warning below five`; `ignores a late result from the previously selected role`; `only renders the role label when its select is available`.
+- Preserved cross-role add reconciliation tests: `keeps a successfully added skill confirmed when the selected role also contains it` and `overlays a successful add on a role GET that resolves afterward`.
+- Checks: targeted screen suite 13/13 passed; final `npm test` 59/59 across 5 files; `npm run build` passed (Vite transformed 94 modules, built in 101ms).
+- Unverified: live endpoint/Supabase/Mongo integration remains untested; mocks remain selected by default. No commit made.
