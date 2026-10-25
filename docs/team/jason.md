@@ -187,3 +187,22 @@ sign-in configured first.
   SQL, not solved.
 - 003 was edited in place; it has not been applied to Supabase yet, so no new migration.
 - Regression tests added for the exact upsert statement; commit: (filled in by orchestrator).
+
+### WP-3 progress note (overnight 2026-10-26)
+
+- Branch: `feat/wp3-discover-api` (from `feat/wp1-sql-003`); commit: (filled in by orchestrator).
+- Delivered `GET /api/discover` (API §7): `backend/app/sql_discover.py` (one statement,
+  CTEs `candidate` / `req` / `ranked`, skill lists via `LEFT JOIN LATERAL` for the page only),
+  `backend/app/routers/discover.py`, models appended to `schemas.py`, one router line in
+  `main.py`, `backend/tests/test_discover.py` (fakes) and `backend/tests/test_discover_sql.py`
+  (12-job synthetic fixture, expected order written literally).
+- The route holds the existing job read lock via `get_authenticated_job_db` (WP-0 makes it
+  shared). That dependency also opens the Mongo handle, so Discover needs `MONGODB_URI` set.
+- EXPLAIN: `docs/perf/discover-explain-fixture.txt`, regenerated with
+  `WRITE_PERF_ARTIFACTS=1 bash backend/scripts/run_disposable_db_tests.sh`; without the
+  variable the test only asserts the plan has an anti-join and a WindowAgg.
+- Checks: ruff check, ruff format --check pass; plain `pytest` 71 passed, 78 skipped;
+  `bash backend/scripts/run_disposable_db_tests.sh` 149 passed.
+- Unverified: not run against Supabase or at WP-10 scale.
+- Open questions: `JobSummary` is also appended by WP-2; keep one copy on integration.
+  `q` is case-insensitive (ILIKE) although API §7 only says "literal substring".

@@ -7,7 +7,7 @@ this copy is the one that is actually enforced.
 
 import re
 from datetime import datetime
-from typing import Annotated, Any
+from typing import Annotated, Any, Literal
 from uuid import UUID
 
 from pydantic import BaseModel, Field, field_validator
@@ -98,3 +98,53 @@ class ResumeUploadResponse(BaseModel):
     file_name: str
     uploaded_at: datetime
     extracted_data: ExtractedData
+
+
+class JobSummary(BaseModel):
+    """The job fields a tracker row carries (docs/API.md section 6)."""
+
+    job_id: str
+    title: str
+    company_name: str
+    location: str | None
+    job_type: Literal["FULL_TIME", "PART_TIME", "INTERNSHIP"] | None
+    work_arrangement: Literal["ONSITE", "HYBRID", "REMOTE"] | None
+    application_url: str
+    source: str
+    source_posted_at: datetime | None
+    is_active: bool
+
+
+# Discover (docs/API.md section 7). JobSummary above is the same model WP-2's
+# tracker appends; keep one copy when the two branches are integrated.
+JobType = Literal["FULL_TIME", "PART_TIME", "INTERNSHIP"]
+WorkArrangement = Literal["ONSITE", "HYBRID", "REMOTE"]
+
+
+class SkillRequirement(BaseModel):
+    skill_id: int
+    name: str
+    requirement_type: Literal["REQUIRED", "PREFERRED"]
+
+
+class JobMatch(BaseModel):
+    required_total: int
+    required_matched: int
+    preferred_total: int
+    preferred_matched: int
+    # required_matched / required_total in 0..1; None when the job lists no
+    # REQUIRED skill, which the frontend labels "no requirements extracted".
+    coverage: float | None
+    matched_skills: list[SkillRequirement]  # REQUIRED first, then by name
+    missing_skills: list[SkillRequirement]  # REQUIRED first, then by name
+
+
+class DiscoverItem(BaseModel):
+    job: JobSummary
+    match: JobMatch
+    rank: int
+
+
+class DiscoverResponse(BaseModel):
+    items: list[DiscoverItem]
+    has_more: bool
