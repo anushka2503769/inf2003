@@ -52,3 +52,23 @@ Initial status: guides, API contract and bootstrap scripts are prepared locally;
 publication, applied database state and feature completion must be checked. Only the
 starter/health flow has implementation evidence at guide creation. Append reviewed
 task/PR, integration checks and next milestone notes here without duplicating everyone’s logs.
+
+### WP-0 progress note (overnight 2026-10-26)
+
+- Branch: `fix/wp0-dev-proxy-and-read-lock`
+- Commit: (filled in by orchestrator)
+- Changes: recreated `frontend/vite.config.ts` (React plugin, host 127.0.0.1, port 5173,
+  `/api` proxy to 127.0.0.1:8000; `vitest.config.ts` kept). Advisory lock split in
+  `backend/app/sql_access.py`: `job_read_lock()` (`pg_advisory_xact_lock_shared(2003001)`)
+  and `job_write_lock()` (`pg_advisory_xact_lock(2003001)`), both after
+  `SET LOCAL lock_timeout = '3s'`; a timeout (55P03) maps to the existing 503
+  `service_unavailable`. `job_pipeline_lock` remains as an alias of `job_read_lock`.
+  Authenticated read routes use the read lock, admin write routes the write lock.
+- Checks: ruff check passed; ruff format --check passed (51 files); pytest 57 passed,
+  39 skipped; disposable DB script 96 passed (includes the real-Postgres shared/exclusive
+  lock test); frontend `npm test` 44 passed, `npm run build` clean.
+- Proxy AC: backend (no env file) + `npm run dev`, then
+  `curl -sS -i http://127.0.0.1:5173/api/health` returned `HTTP/1.1 200 OK` with body
+  `{"status":"ok","service":"jobless-simulator-api"}`.
+- Unverified: not run against Supabase.
+- Open questions: none.
