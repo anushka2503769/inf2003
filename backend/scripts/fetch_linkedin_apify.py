@@ -1,4 +1,4 @@
-"""Fetch Singapore job postings from LinkedIn through an Apify actor.
+"""Fetch Singapore internship postings from LinkedIn through an Apify actor.
 
 Runs `curious_coder/linkedin-jobs-scraper` once per search keyword, keeps only the
 fields the job pipeline needs, drops recruiter personal data, removes duplicates by
@@ -33,21 +33,28 @@ API_BASE = "https://api.apify.com/v2"
 PRICE_PER_ITEM_USD = 0.002
 REPO_ROOT = Path(__file__).resolve().parents[2]
 
-# Spread across role families so the skill-gap screen has several roles to compare.
+# Internships only, across tech and non-tech roles. Each search maps to a role family the
+# skill dictionary (002_seed_skills.sql) and role_classifier.py already cover, so most
+# postings get matched skills and a role category instead of "Unclassified".
 DEFAULT_KEYWORDS = [
-    "software engineer intern",
-    "junior software engineer",
-    "frontend developer intern",
-    "backend developer intern",
+    "software engineering intern",
     "data analyst intern",
-    "data science intern",
-    "machine learning intern",
+    "IT support intern",
     "cybersecurity intern",
-    "devops cloud intern",
-    "business analyst intern",
-    "financial analyst intern",
-    "product manager intern",
-    "ui ux designer intern",
+    "cloud devops intern",
+    "product management intern",
+    "UI UX design intern",
+    "graphic design intern",
+    "finance intern",
+    "accounting intern",
+    "audit intern",
+    "marketing intern",
+    "social media marketing intern",
+    "sales intern",
+    "business development intern",
+    "human resources intern",
+    "operations intern",
+    "administrative intern",
 ]
 
 # Allowlist of actor output fields. Recruiter names/photos/profiles, logos and
@@ -80,7 +87,7 @@ def parse_args() -> argparse.Namespace:
         help="Search keyword; repeat for several. Defaults to a built-in role list.",
     )
     parser.add_argument("--location", default="Singapore")
-    parser.add_argument("--limit-per-search", type=int, default=50)
+    parser.add_argument("--limit-per-search", type=int, default=30)
     parser.add_argument(
         "--date-posted",
         default="pastMonth",

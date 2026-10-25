@@ -81,7 +81,7 @@ These close the "still open" items of PRD v1. Change them only through Zhihao.
 | Topic | Decision |
 |---|---|
 | Extraction | Stay **rule-based** (dictionary regex + heuristics). No LLM in this build. Report it honestly as rule-based. |
-| Job provider | **Primary:** a one-off LinkedIn Singapore export via Apify (`backend/scripts/fetch_linkedin_apify.py`, ~13 role searches, ≤ US$2), imported from file. **Secondary:** the three implemented keyless providers. Target 200–500 active jobs. The report must state LinkedIn data was collected once via Apify for coursework only. |
+| Job provider | **Primary:** a one-off LinkedIn Singapore export via Apify (`backend/scripts/fetch_linkedin_apify.py`, 18 internship searches across tech and non-tech roles, ≤ 30 each, ≤ US$2), imported from file. **Secondary:** the three implemented keyless providers. Target 200–500 active jobs. The report must state LinkedIn data was collected once via Apify for coursework only. |
 | Tracker statuses | `NOT_INTERESTED, SAVED, APPLIED, INTERVIEW, REJECTED, OFFER` (as in the SQL CHECK). |
 | Swipe persistence | **One immediate `PUT` per decision** with optimistic UI and a visible retry on failure. No browser batching, no offline queue. |
 | Requeue | `DELETE /api/me/jobs/{job_id}` removes a decision ("undo"), so the job can reappear in Discover. This is the tracker's D in CRUD. |
