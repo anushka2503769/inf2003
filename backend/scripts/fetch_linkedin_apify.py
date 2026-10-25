@@ -12,6 +12,9 @@ Spending is capped with Apify's own maxTotalChargeUsd per run plus a total budge
     uv run --env-file .env python scripts/fetch_linkedin_apify.py --dry-run
     uv run --env-file .env python scripts/fetch_linkedin_apify.py --sample 5
     uv run --env-file .env python scripts/fetch_linkedin_apify.py
+
+Rerunning after an interruption resumes the output file and reuses any run from the
+last day with identical input, so finished searches are not paid for twice.
 """
 
 import argparse
@@ -19,7 +22,7 @@ import json
 import os
 import sys
 import time
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
@@ -106,7 +109,11 @@ def parse_args() -> argparse.Namespace:
         help="Run only the first keyword with N results, to check the output shape.",
     )
     parser.add_argument("--out", type=Path, help="Output file (default data/raw/...).")
-    parser.add_argument("--force", action="store_true", help="Overwrite the output file.")
+    parser.add_argument(
+        "--force",
+        action="store_true",
+        help="Start the output file afresh instead of resuming it.",
+    )
     parser.add_argument("--dry-run", action="store_true", help="Print the planned runs and exit.")
     parser.add_argument("--timeout-secs", type=int, default=900, help="Per run.")
     return parser.parse_args()
@@ -123,27 +130,87 @@ def actor_input(keyword: str, args: argparse.Namespace, limit: int) -> dict[str,
     }
 
 
+def request_json(session: requests.Session, method: str, url: str, **kwargs: Any) -> Any:
+    """Call the Apify API, retrying dropped connections and 5xx responses."""
+    for attempt in range(6):
+        try:
+            response = session.request(method, url, **kwargs)
+            if response.status_code < 500:
+                response.raise_for_status()
+                return response.json()
+            error: Exception = requests.HTTPError(f"{response.status_code} from Apify")
+        except (
+            requests.ConnectionError,
+            requests.Timeout,
+            requests.exceptions.ChunkedEncodingError,
+        ) as exc:
+            error = exc
+        wait = 2**attempt
+        print(f"  Apify request failed ({type(error).__name__}); retrying in {wait}s")
+        time.sleep(wait)
+    raise error
+
+
 def start_run(
     session: requests.Session, payload: dict[str, Any], limit: int, cap: float
 ) -> dict[str, Any]:
-    response = session.post(
+    return request_json(
+        session,
+        "POST",
         f"{API_BASE}/acts/{ACTOR_ID}/runs",
         params={"maxItems": limit, "maxTotalChargeUsd": f"{cap:.2f}"},
         json=payload,
         timeout=60,
-    )
-    response.raise_for_status()
-    return response.json()["data"]
+    )["data"]
+
+
+def recent_runs(session: requests.Session) -> list[dict[str, Any]]:
+    """This account's runs of the actor from the last day, newest first."""
+    runs = request_json(
+        session,
+        "GET",
+        f"{API_BASE}/acts/{ACTOR_ID}/runs",
+        params={"desc": "true", "limit": 100},
+        timeout=60,
+    )["data"]["items"]
+    cutoff = datetime.now(UTC) - timedelta(days=1)
+    return [
+        run
+        for run in runs
+        if run["status"] not in {"FAILED", "ABORTED", "TIMED-OUT"}
+        and datetime.fromisoformat(run["startedAt"].replace("Z", "+00:00")) > cutoff
+    ]
+
+
+def find_reusable_run(
+    session: requests.Session, runs: list[dict[str, Any]], payload: dict[str, Any]
+) -> dict[str, Any] | None:
+    """A recent run with exactly this input, so an interrupted fetch is not paid twice."""
+    for run in runs:
+        store = run.get("defaultKeyValueStoreId")
+        if not store:
+            continue
+        try:
+            run_input = request_json(
+                session, "GET", f"{API_BASE}/key-value-stores/{store}/records/INPUT", timeout=60
+            )
+        except requests.HTTPError:
+            continue
+        if all(run_input.get(key) == value for key, value in payload.items()):
+            return run
+    return None
 
 
 def wait_for_run(session: requests.Session, run_id: str, timeout_secs: int) -> dict[str, Any]:
     deadline = time.monotonic() + timeout_secs
     while True:
-        response = session.get(
-            f"{API_BASE}/actor-runs/{run_id}", params={"waitForFinish": 60}, timeout=90
-        )
-        response.raise_for_status()
-        run = response.json()["data"]
+        run = request_json(
+            session,
+            "GET",
+            f"{API_BASE}/actor-runs/{run_id}",
+            params={"waitForFinish": 60},
+            timeout=90,
+        )["data"]
         if run["status"] in TERMINAL_STATUSES:
             return run
         if time.monotonic() > deadline:
@@ -152,13 +219,33 @@ def wait_for_run(session: requests.Session, run_id: str, timeout_secs: int) -> d
 
 
 def dataset_items(session: requests.Session, dataset_id: str) -> list[dict[str, Any]]:
-    response = session.get(
+    return request_json(
+        session,
+        "GET",
         f"{API_BASE}/datasets/{dataset_id}/items",
         params={"clean": "true", "format": "json"},
         timeout=120,
     )
-    response.raise_for_status()
-    return response.json()
+
+
+def write_document(out: Path, args: argparse.Namespace, searches: list, jobs: dict) -> None:
+    """Rewrite the output after every search, atomically, so progress survives a crash."""
+    document = {
+        "source": "linkedin_apify",
+        "actor": ACTOR_NAME,
+        "fetched_at": datetime.now(UTC).isoformat(timespec="seconds"),
+        "location": args.location,
+        "date_posted": args.date_posted,
+        "searches": searches,
+        "job_count": len(jobs),
+        "jobs": list(jobs.values()),
+    }
+    out.parent.mkdir(parents=True, exist_ok=True)
+    temporary = out.with_suffix(".json.tmp")
+    temporary.write_text(
+        json.dumps(document, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
+    )
+    temporary.replace(out)
 
 
 def clean_job(item: dict[str, Any], keyword: str) -> dict[str, Any] | None:
@@ -197,22 +284,34 @@ def main() -> int:
     if not token:
         print("APIFY_TOKEN is not set. Add it to backend/.env and run with --env-file .env.")
         return 2
+    jobs: dict[str, dict[str, Any]] = {}
+    searches: list[dict[str, Any]] = []
     if out.exists() and not args.force:
-        print(f"{out} already exists; pass --force to overwrite.")
-        return 2
+        # Resume: keep finished searches and only run the missing ones.
+        previous = json.loads(out.read_text(encoding="utf-8"))
+        jobs = {job["id"]: job for job in previous["jobs"]}
+        searches = previous["searches"]
+        print(f"Resuming {out.name}: {len(searches)} searches, {len(jobs)} jobs already saved.")
+    done = {search["keyword"] for search in searches}
+    spent = sum(search["usage_usd"] for search in searches)
 
     session = requests.Session()
     session.headers["Authorization"] = f"Bearer {token}"
+    reusable = recent_runs(session)
 
-    jobs: dict[str, dict[str, Any]] = {}
-    searches: list[dict[str, Any]] = []
-    spent = 0.0
     for keyword in keywords:
+        if keyword in done:
+            continue
         remaining = args.max_charge_usd - spent
         if remaining < 0.05:
             print(f"Budget reached (${spent:.2f}); skipping the remaining searches.")
             break
-        run = start_run(session, actor_input(keyword, args, limit), limit, remaining)
+        payload = actor_input(keyword, args, limit)
+        run = find_reusable_run(session, reusable, payload)
+        if run:
+            print(f"{keyword!r}: reusing run {run['id']} (already paid)")
+        else:
+            run = start_run(session, payload, limit, remaining)
         run = wait_for_run(session, run["id"], args.timeout_secs)
         items = dataset_items(session, run["defaultDatasetId"])
         cost = max(float(run.get("usageTotalUsd") or 0.0), len(items) * PRICE_PER_ITEM_USD)
@@ -241,23 +340,13 @@ def main() -> int:
                 "usage_usd": round(cost, 4),
             }
         )
+        write_document(out, args, searches, jobs)
         print(
             f"{keyword!r}: {run['status']}, {len(items)} returned, {kept} usable, "
             f"{new} new, ${cost:.3f} (total ${spent:.3f})"
         )
 
-    out.parent.mkdir(parents=True, exist_ok=True)
-    document = {
-        "source": "linkedin_apify",
-        "actor": ACTOR_NAME,
-        "fetched_at": datetime.now(UTC).isoformat(timespec="seconds"),
-        "location": args.location,
-        "date_posted": args.date_posted,
-        "searches": searches,
-        "job_count": len(jobs),
-        "jobs": list(jobs.values()),
-    }
-    out.write_text(json.dumps(document, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    write_document(out, args, searches, jobs)
     print(f"Wrote {len(jobs)} unique jobs to {out} (spent ${spent:.3f}).")
     return 0 if jobs else 1
 
