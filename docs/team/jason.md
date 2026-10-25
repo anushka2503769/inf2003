@@ -1,5 +1,9 @@
 # Jason — Supabase and Python profile API
 
+> **Current work (PRD v2, 25 Oct 2026):** WP-1 (SQL migration 003), WP-2 (tracker API), WP-3 (Discover API), WP-6 backend (resume → suggested skills). Specs, allowed files and
+> acceptance criteria are in [PRD.md §5](../PRD.md); shapes in [API.md](../API.md).
+> Task IDs below are from the first milestone; check their progress notes before reusing them.
+
 Read [team workflow](README.md), [API contract](../API.md), [ERD](../erd.md) and
 [database instructions](../DB/README.md) first. Own SQL and backend auth/profile/skills;
 Jiaxin owns MongoDB. Coordinate Google provider setup with Nasya.

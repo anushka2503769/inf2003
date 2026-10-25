@@ -1,5 +1,9 @@
 # Zhihao — moderator, final reviewer and integration
 
+> **Current work (PRD v2, 25 Oct 2026):** WP-0 (dev proxy + shared read lock), WP-10 (benchmark, with Jason), WP-11 (manual), review of every WP PR into `dev`. Specs, allowed files and
+> acceptance criteria are in [PRD.md §5](../PRD.md); shapes in [API.md](../API.md).
+> Task IDs below are from the first milestone; check their progress notes before reusing them.
+
 Read [team workflow](README.md), [PRD](../PRD.md), [API contract](../API.md),
 [ERD](../erd.md) and [database setup](../DB/README.md).
 

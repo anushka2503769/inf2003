@@ -3,10 +3,13 @@
 INF2003 team project: discover relevant internships/jobs, save decisions, track
 applications and identify skill gaps for a target role.
 
-**Current state:** the auth shell is implemented. The frontend supports Google sign-in,
-onboarding and profile editing; the Python API verifies tokens and exposes profile
-routes. Profiles use a process-local memory store for now, so data is lost when the API
-restarts. Product discovery, tracking and database integrations are not implemented yet.
+**Current state (25 October 2026):** Google sign-in, onboarding, profile and confirmed
+skills run on Supabase PostgreSQL; resume upload and job ingestion write MongoDB. Discover,
+tracker and skill-gap features are being built under [PRD v2](PRD.md) work packages.
+Without `DATABASE_URL` the API falls back to an in-memory profile store (profiles only).
+
+> Known issue until WP-0 lands: `frontend/vite.config.ts` is missing, so `npm run dev`
+> does not proxy `/api` to the backend. See PRD §3.
 
 ## Team
 
@@ -53,8 +56,8 @@ cp backend/.env.example backend/.env
 Windows PowerShell users can run `Copy-Item backend/.env.example backend/.env` instead.
 Replace the placeholders only in the ignored local files. Supabase secret keys and
 database credentials stay on the backend and must never use a `VITE_` prefix, because
-Vite exposes prefixed values to the browser. Job API and LLM variables will be added
-after the team selects those providers. For local work before a Supabase project is
+Vite exposes prefixed values to the browser. The implemented job providers need no API
+key and there is no LLM in this build. For local work before a Supabase project is
 available, `AUTH_ALLOW_UNVERIFIED_TOKENS=true` enables the development-only token
 bypass; never use it with `APP_ENV=production`.
 
@@ -83,8 +86,8 @@ uv run --env-file .env --locked uvicorn app.main:app --reload --host 127.0.0.1 -
 
 The Vite development server forwards `/api` requests to the backend on port 8000.
 Use relative `/api/...` paths in frontend requests. This avoids development CORS
-configuration. The profile store is memory-only, so no database service is needed for
-this auth-shell slice. If the frontend reports that the backend is unavailable, start
+configuration. Profile, skill and job routes need `DATABASE_URL` and `MONGODB_URI` in
+`backend/.env`; without `DATABASE_URL` only the in-memory profile flow works. If the frontend reports that the backend is unavailable, start
 the API and reload. If a port is occupied, stop the other process; changing the API
 port also requires changing the Vite proxy target.
 
@@ -98,12 +101,12 @@ Frontend:
 
 ```sh
 cd frontend
+npm test
 npm run build
 ```
 
-This runs strict TypeScript checking and builds the app. No frontend test runner or
-separate frontend lint framework is installed yet; add behavioural tests with the
-first product interaction.
+`npm test` runs Vitest (jsdom); `npm run build` runs strict TypeScript checking and builds
+the app. Put feature tests next to the feature (`src/features/<name>/*.test.tsx`).
 
 Backend:
 
@@ -112,6 +115,13 @@ cd backend
 uv run --locked ruff check .
 uv run --locked ruff format --check .
 uv run --locked pytest
+```
+
+Tests that need PostgreSQL are skipped unless `TEST_DATABASE_URL` is set. Run them in a
+throwaway Docker container (never against the shared Supabase project):
+
+```sh
+bash backend/scripts/run_disposable_db_tests.sh
 ```
 
 GitHub Actions runs these checks for pull requests once this workflow is pushed.
@@ -150,8 +160,8 @@ implementing real user-data endpoints.
 ## Layout and design references
 
 For the initial Supabase tables, see [database setup](DB/README.md) and
-[001_initial_schema.sql](DB/001_initial_schema.sql). Creating tables does not yet connect
-the Python application to them.
+[001_initial_schema.sql](DB/001_initial_schema.sql). The API connects with `DATABASE_URL`
+(psycopg2) and `MONGODB_URI` (pymongo).
 
 ```text
 frontend/src/                  React UI (TypeScript)
@@ -159,8 +169,10 @@ backend/app/                   FastAPI application (Python)
 backend/tests/                 API tests
 backend/.env.example           Safe backend configuration template
 .github/                       CI workflow
-docs/erd.md                    Current provisional schema and relationships
-docs/PRD.md                    MVP scope, acceptance criteria and open decisions
+docs/erd.md                    Schema, relationships and planned migration 003
+docs/PRD.md                    PRD v2: scope, decisions and work packages WP-0..WP-11
+docs/API.md                    Request/response contract (implemented and planned routes)
+docs/job-pipeline.md           Cross-database job ingestion rules
 docs/pull-request-template.md  Pull-request review checklist reference
 ```
 

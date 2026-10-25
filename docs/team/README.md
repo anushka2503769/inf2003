@@ -1,19 +1,20 @@
 # Working with your coding agent
 
-First milestone: Google sign-in → create/read profile → edit name → add/remove confirmed
-skills → reload and see the saved result. The overall MVP is broader; do not start all
-future screens or infrastructure at once.
+The first milestone (sign-in, profile, confirmed skills) is done. Current work is
+**PRD v2** ([PRD.md](../PRD.md)): work packages WP-0 to WP-11, each with an owner, branch
+name, allowed files and acceptance criteria. Agents pick one WP at a time and follow
+PRD §6 "Rules for coding agents".
 
 ## Start here
 
 Tell your agent your name and what you want:
 
-> I'm Jason. Read AGENTS.md and my team guide, inspect the current code, and tell me
-> my next unfinished task and anything I need from another teammate.
+> I'm Jason. Read AGENTS.md, my team guide and docs/PRD.md, inspect the current code,
+> and tell me my next unfinished work package and anything I need from another teammate.
 
 When ready to build:
 
-> Implement task JAS-01 from my guide on a task branch. Preserve other people's work,
+> Implement WP-2 from docs/PRD.md on a task branch. Preserve other people's work,
 > run the relevant checks, and report what remains unverified.
 
 Identity alone does not authorize implementation or external changes. If work requires
@@ -28,15 +29,15 @@ All members: [setup](../README.md), [PRD](../PRD.md), [API contract](../API.md),
 and their individual guide. Backend members also read [ERD](../erd.md) and
 [database setup](../DB/README.md). Read relevant source and tests before changing them.
 
-## Initial state — verify rather than assume
+## Current state — verify rather than assume
 
-At the time these guides were created:
+As of 25 October 2026 (`dev` @ 5dedfcb), see PRD §3 for the full list:
 
-- Runnable code consists of the React starter and FastAPI health endpoint/tests.
-- SQL and MongoDB bootstrap files and the first API contract exist for review.
-- Google sign-in, profile/skill endpoints and product components are not implemented.
-- Applying database scripts, configuring providers and live integration have not been
-  verified. File presence is not proof that a database was created or a task finished.
+- Built: Google sign-in, profile and confirmed skills on PostgreSQL, resume upload to
+  MongoDB, job ingestion pipeline, job read routes, `SkillEditor` component (not mounted).
+- Not built: tracker, Discover ranking, skill gap, Discover/Vault/Skill Gap screens,
+  resume-to-skills flow, migration 003, benchmark, user manual.
+- File presence is not proof that a database was changed or a task finished.
 
 At each new session inspect `git status`, current branch, relevant code/tests and the
 latest guide notes. Compare actual behaviour to acceptance criteria. Do not overwrite
@@ -54,9 +55,15 @@ Never record credentials, tokens, real resume content or secret connection strin
 | Nasya | [nasya.md](nasya.md) | Google sign-in UI, session/API client, onboarding/profile screen |
 | Anuska | [anuska.md](anuska.md) | Skill search/add/remove component and mock scenarios |
 
-Later ownership: Nasya leads Discover UI; Anuska leads Vault/Skill Gap UI; Jason leads
-SQL job/tracker APIs; Jiaxin leads extraction and role-gap document queries. Those
-features need their own contracts before implementation.
+PRD v2 work packages (contracts are in [API.md](../API.md)):
+
+| Person | Work packages |
+|---|---|
+| Zhihao | WP-0 dev proxy + read lock, WP-10 benchmark (with Jason), WP-11 manual edit, all reviews |
+| Jason | WP-1 SQL migration 003, WP-2 tracker API, WP-3 Discover API, WP-6 resume backend |
+| Jiaxin | WP-4 MongoDB skill gap, WP-5 ingestion improvements + live ingestion run |
+| Nasya | WP-7 Discover screen, app shell wiring (`App.tsx` imports) |
+| Anushka | WP-6 resume/skills UI, WP-8 Vault screen, WP-9 Skill Gap screen |
 
 ### Shared files — one integrator per area
 

@@ -1,7 +1,9 @@
 # MVP data model
 
-Provisional, approved discussion baseline as of 9 September 2026. No migrations have
-been applied. Revisit constraints and schema as the course progresses.
+Baseline approved 9 September 2026; updated 25 October 2026. `001` and the `002` skill
+seed (139 skills) are applied to the development Supabase project. Migration `003`
+(views, triggers, indexes) is planned under WP-1 in [PRD.md](PRD.md) — see the end of
+this file. Tables and columns below are unchanged by 003.
 
 The runnable Supabase bootstrap is [DB/001_initial_schema.sql](DB/001_initial_schema.sql).
 See [DB/README.md](DB/README.md) for application instructions and verification limits.
@@ -137,3 +139,21 @@ status into documents just to support filtering. Reassess if dataset size change
 - Google sign-in through Supabase Auth is agreed. All application-data access goes
   through Python. Token verification, deletion flows and cross-store recovery remain
   implementation work before real student data is accepted.
+
+## Migration 003 — views, triggers, indexes (planned, WP-1)
+
+File: `DB/003_views_triggers_indexes.sql`. Adds database objects only; no table or column
+changes, so the ER diagram above stays valid.
+
+| Object | Kind | Purpose |
+|---|---|---|
+| `set_updated_at()` + triggers on `users`, `user_jobs` | trigger | Maintain `updated_at` on real changes only (`OLD.* IS DISTINCT FROM NEW.*`) |
+| `user_jobs_requires_active_job` | trigger (non-standard constraint) | A **new** tracker row must reference an active job; later deactivation keeps existing rows valid |
+| `v_job_requirement_counts` | view | `required_total` / `preferred_total` per active job, used by Discover ranking |
+| `v_user_tracker_summary` | view | Tracker counts per user and status |
+| `jobs (job_type, work_arrangement) WHERE is_active` | partial index | Discover filters |
+| `jobs (source_posted_at DESC) WHERE is_active` | partial index | Discover tie-break ordering |
+| `user_jobs (user_id, status)` | index | Tracker tabs and summary |
+
+Views follow 001's access model: revoked from `PUBLIC`/`anon`/`authenticated`, `SELECT`
+granted to `service_role`.

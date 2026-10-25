@@ -112,12 +112,15 @@ duplicate references and replacement of the current resume using synthetic data.
 
 ## Verification status
 
-The file has been reviewed statically against the agreed fields and current official
-documentation. No local PostgreSQL executable is available in this session, so execution
-and constraint/access tests on Supabase remain to be performed by the team. MongoDB
-script syntax and bootstrap flow are checked locally using a simulated shell interface;
-mongosh is not installed here. Actual MongoDB validator enforcement and index behaviour
-must still be tested on the development database. Neither script has been applied remotely.
+As reported in the 30 September progress report, `001` and the `002` skill seed (139
+skills) are applied to the development Supabase project and constraint checks passed.
+MongoDB collections, validators and indexes are in the repository; live document counts
+are not yet recorded. Migration `003` (views, triggers, indexes; PRD WP-1) is not written
+yet. When a script is applied to a shared project, record the date and commit here.
+
+Automated SQL tests run in a disposable Docker PostgreSQL via
+`backend/scripts/run_disposable_db_tests.sh` (applies `001`; WP-1 adds `003`, WP-4 adds
+a disposable MongoDB).
 
 References: [Supabase user data](https://supabase.com/docs/guides/auth/managing-user-data),
 [Supabase RLS and grants](https://supabase.com/docs/guides/database/postgres/row-level-security),

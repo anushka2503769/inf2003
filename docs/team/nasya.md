@@ -1,5 +1,9 @@
 # Nasya — sign-in, onboarding and profile
 
+> **Current work (PRD v2, 25 Oct 2026):** WP-7 (Discover screen) and the `App.tsx` import swaps for the new screens. Specs, allowed files and
+> acceptance criteria are in [PRD.md §5](../PRD.md); shapes in [API.md](../API.md).
+> Task IDs below are from the first milestone; check their progress notes before reusing them.
+
 Read [team workflow](README.md), [setup](../README.md), [PRD](../PRD.md) and
 [API contract](../API.md). Own the frontend shell and common client modules; coordinate
 skill-editor integration with Anuska and Google setup with Jason.

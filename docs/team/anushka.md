@@ -1,5 +1,9 @@
 # Anushka — confirmed-skill editing
 
+> **Current work (PRD v2, 25 Oct 2026):** WP-6 frontend (resume upload + suggested skills, mount SkillEditor), WP-8 (Vault screen), WP-9 (Skill Gap screen). Specs, allowed files and
+> acceptance criteria are in [PRD.md §5](../PRD.md); shapes in [API.md](../API.md).
+> Task IDs below are from the first milestone; check their progress notes before reusing them.
+
 Read [team workflow](README.md), [setup](../README.md), [PRD](../PRD.md) and
 [API contract](../API.md). Own the skill editor in the first milestone; Nasya owns
 the profile shell, authentication and shared API client.

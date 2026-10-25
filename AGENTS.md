@@ -18,6 +18,10 @@ For "I'm Jason, what should I do?": read the shared and personal guides, inspect
 implementation/Git state, then explain the next unfinished task, dependencies and checks.
 For an explicit request to implement that task, proceed within its agreed scope.
 
+Current build scope is [docs/PRD.md](docs/PRD.md) (PRD v2): work packages WP-0 to WP-11
+with owners, branches, allowed files and acceptance criteria. Agents building a WP
+follow PRD §6 "Rules for coding agents" and the contracts in docs/API.md.
+
 Preserve other people's edits. Check the shared-file ownership table before editing.
 Use task branches from the team's current dev base; do not push directly to main/dev.
 Zhihao performs final review and integration. A guide is not authorization to merge,

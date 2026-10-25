@@ -28,7 +28,8 @@ ingestion, re-extraction, duplicate preview, and deletion controls require the
 configured admin allowlist.
 
 Every job document route holds one transaction-scoped PostgreSQL advisory lock while
-it reads or updates SQL and Mongo. Job reads require both `ready=true` in Mongo and
+it reads or updates SQL and Mongo. Today reads and writes take the same exclusive
+try-lock, so concurrent readers can get 503; PRD WP-0 changes reads to a shared lock. Job reads require both `ready=true` in Mongo and
 an active SQL parent, so pending or legacy documents remain hidden. SQL-only reports
 query the active parent directly. Duplicate deletion
 and direct job-document deletion return `409` until a cross-store

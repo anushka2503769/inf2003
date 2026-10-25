@@ -1,5 +1,9 @@
 # Jiaxin — MongoDB and document access
 
+> **Current work (PRD v2, 25 Oct 2026):** WP-4 (MongoDB skill gap + Mongo integration tests), WP-5 (ingestion columns, skip-and-continue, CLI) and the live ingestion run. Specs, allowed files and
+> acceptance criteria are in [PRD.md §5](../PRD.md); shapes in [API.md](../API.md).
+> Task IDs below are from the first milestone; check their progress notes before reusing them.
+
 Read [team workflow](README.md), [PRD](../PRD.md), [ERD](../erd.md),
 [MongoDB setup](../DB/README.md#mongodb) and the [API contract](../API.md).
 Own MongoDB deployment/document work. Jason owns shared Python auth and SQL access.
