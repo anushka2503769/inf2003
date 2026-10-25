@@ -303,3 +303,27 @@ def test_roles_empty_when_nothing_is_ready(fakes) -> None:
     response = call("/api/skill-gap/roles", fakes)
     assert response.status_code == 200
     assert response.json() == {"items": []}
+
+
+def _dependency_calls(router: Any, path: str) -> set[Any]:
+    # The routers' own route tables: this FastAPI version keeps included
+    # routers nested inside app.routes. The HTTP tests above prove inclusion.
+    routes = [r for r in router.routes if getattr(r, "path", None) == path and "GET" in r.methods]
+    assert len(routes) == 1, path
+    return {dependency.call for dependency in routes[0].dependant.dependencies}
+
+
+@pytest.mark.parametrize("path", ["/api/skill-gap/roles", "/api/me/skill-gap"])
+def test_skill_gap_routes_use_the_job_read_dependency(path: str) -> None:
+    """Same object as the job read routes, so WP-0's shared read lock applies here too."""
+    from app import jobs, jobs_search
+    from app.auth import current_user
+    from app.dependencies import get_authenticated_job_db
+
+    job_read = (
+        _dependency_calls(jobs.router, "/api/jobs")
+        & _dependency_calls(jobs.router, "/api/jobs/{job_id}")
+        & _dependency_calls(jobs_search.router, "/api/jobs/search")
+    )
+    assert job_read == {current_user, get_authenticated_job_db}
+    assert _dependency_calls(skill_gap_router.router, path) == job_read

@@ -353,29 +353,66 @@ def test_roles_count_active_ready_jobs_by_count_then_name() -> None:
     }
 
 
-@pytest.mark.parametrize("role", [SE, DA, CY, DESIGN, "Unknown"])
-def test_sql_and_mongo_engines_return_identical_counts(role: str) -> None:
+COUNT_FIELDS = {
+    "skill_id",
+    "name",
+    "job_count",
+    "frequency",
+    "required_count",
+    "preferred_count",
+    "user_has",
+}
+
+
+def _both_engines(role: str):
     from app.db import get_db
     from app.skill_gap import role_job_ids, skill_gap_mongo, skill_gap_sql
     from app.sql_access import get_active_job_ids
 
     db = get_db()
     active = get_active_job_ids()
-    mongo_sample, mongo_rows = skill_gap_mongo(db, active, role, ANA)
-    sql_sample, sql_rows = skill_gap_sql(role_job_ids(db, active, role), ANA)
+    mongo = skill_gap_mongo(db, active, role, ANA)
+    sql = skill_gap_sql(role_job_ids(db, active, role), ANA)
+    return mongo, sql
 
-    counts = (
-        "skill_id",
-        "name",
-        "job_count",
-        "frequency",
-        "required_count",
-        "preferred_count",
-        "user_has",
-    )
+
+@pytest.mark.parametrize("role", [SE, DA, CY, DESIGN, "Unknown"])
+def test_engines_agree_on_normalised_job_skills_links(role: str) -> None:
+    """Engine parity on job_skills seeded by _seed() with REQUIRED precedence applied.
+
+    This proves the two queries count the same way. It does NOT prove production
+    ingestion writes such links: see the xfail test below.
+    """
+    (mongo_sample, mongo_rows), (sql_sample, sql_rows) = _both_engines(role)
+
     assert sql_sample == mongo_sample
-    assert [row.model_dump(include=set(counts)) for row in sql_rows] == [
-        row.model_dump(include=set(counts)) for row in mongo_rows
+    assert [row.model_dump(include=COUNT_FIELDS) for row in sql_rows] == [
+        row.model_dump(include=COUNT_FIELDS) for row in mongo_rows
     ]
     if role == SE:
         assert sql_sample == 4 and len(sql_rows) == 3
+
+
+@pytest.mark.xfail(
+    strict=True,
+    raises=AssertionError,  # any other error (e.g. the resync failing) is a real failure
+    reason="sql_access._replace_job_skills is last-wins; PRD §4 says REQUIRED wins"
+    " — open question for Zhihao",
+)
+def test_engines_agree_when_links_come_from_production_sync() -> None:
+    """Job 1 lists Python REQUIRED then PREFERRED; resync its links the production way."""
+    from app.sql_access import replace_job_skills
+
+    client, mongo = _mongo()
+    try:
+        document = mongo["job_documents"].find_one({"job_id": _job_id(1)})
+    finally:
+        client.close()
+    replace_job_skills(_job_id(1), document["extracted_data"]["requirements"])
+
+    (_, mongo_rows), (_, sql_rows) = _both_engines(SE)
+    python = skill_ids()["Python"]
+    mongo_required = next(row.required_count for row in mongo_rows if row.skill_id == python)
+    sql_required = next(row.required_count for row in sql_rows if row.skill_id == python)
+    assert mongo_required == 1
+    assert sql_required == mongo_required

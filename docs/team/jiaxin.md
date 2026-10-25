@@ -73,6 +73,23 @@ Inspect current code before work. Append task/result/check/PR/next-step notes he
 - Unverified: not run against the team's Supabase or MongoDB; no live ingested data.
   The SQL engine has no `minimum_years` column, so it reports years as null/0.
 - Open questions: `sql_access._replace_job_skills` keeps the LAST requirement type when a
-  job lists a skill twice (`ON CONFLICT ... DO UPDATE`), while the PRD rule is REQUIRED
-  wins; the engines agree only if ingestion applies REQUIRED precedence (WP-5?).
+  job lists a skill twice, while PRD §4 says REQUIRED wins. It is latent today (extraction
+  emits at most one requirement per skill_id) and `sql_access.py` is outside WP-4's files.
+  Pinned by the strict xfail `test_skill_gap_db.py::test_engines_agree_when_links_come_from_production_sync`,
+  which syncs links through `replace_job_skills`. Suggested one-line fix (table
+  `public.job_skills`, columns verified): `ON CONFLICT (job_id, skill_id) DO UPDATE SET
+  requirement_type = CASE WHEN job_skills.requirement_type = 'REQUIRED' THEN 'REQUIRED'
+  ELSE EXCLUDED.requirement_type END`. When fixed, the xfail turns into XPASS (strict) and
+  the marker must be removed. `test_engines_agree_on_normalised_job_skills_links` checks
+  parity on pre-normalised links only.
   Mongo skill ids missing from the SQL dictionary are dropped from the response.
+- Read lock: both routes use `AuthenticatedJobDatabase` (`get_authenticated_job_db`), still
+  the exclusive try-lock on this base; WP-0 is merged first and makes it shared.
+  `test_skill_gap.py::test_skill_gap_routes_use_the_job_read_dependency` asserts both routes
+  use the same dependency set as the job read routes. WP-0's own route-wiring test lists
+  router modules explicitly; add `skill_gap` there after the merge.
+- File list: `backend/tests/test_skill_gap_db.py` is not in the PRD WP-4 list; the
+  orchestrator explicitly allowed splitting the Mongo integration tests into it.
+- Fix round checks: `ruff check` → All checks passed; `ruff format --check` → 55 files
+  already formatted; `pytest` (no env) → 73 passed, 56 skipped;
+  `run_disposable_db_tests.sh` → 128 passed, 1 xfailed, exit 0; no leftover containers.
