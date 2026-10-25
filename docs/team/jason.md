@@ -190,7 +190,7 @@ sign-in configured first.
 
 ### WP-2 progress note (overnight 2026-10-26)
 
-- Branch: `feat/wp2-tracker-api`; commit: (filled in by orchestrator).
+- Branch: `feat/wp2-tracker-api`; commit: `f8a1955` (build) + `b2584b9` (review fix round); orchestrator re-ran checks on `b2584b9`: ruff clean, pytest 77 passed / 65 skipped, disposable DB 142 passed (rebased onto WP-1 17939f8).
 - Delivered `sql_tracker.py`, `routers/tracker.py`, tracker models appended to `schemas.py`,
   one `include_router` line (plus the router import) in `main.py`, and route + disposable-DB
   SQL tests.
