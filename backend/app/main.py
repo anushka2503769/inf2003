@@ -14,7 +14,7 @@ from . import (
     resumes_read,
 )
 from .errors import register_error_handlers
-from .routers import profile, skills
+from .routers import profile, skill_gap, skills
 
 app = FastAPI(title="Jobless Simulator API", version="0.1.0")
 
@@ -29,6 +29,7 @@ app.include_router(jobs.router)
 app.include_router(jobs_external_multi.router)
 app.include_router(jobs_extraction_router.router)
 app.include_router(reports.router)
+app.include_router(skill_gap.router)
 
 
 class HealthResponse(BaseModel):
