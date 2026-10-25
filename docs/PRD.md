@@ -274,6 +274,10 @@ Branch `feat/wp5-ingestion`. Files: `backend/app/job_sources.py`, `backend/app/j
    Temporary → null); `work_arrangement` from "remote"/"hybrid"/"on-site" wording in
    location or description, else null; `raw_jd = descriptionText`. `industries` goes to the
    existing `extracted_data.industry` field. The file path never makes a network call.
+   The real export (504 Singapore internships, 25 Oct 2026, ~4 MB) is **not in git**:
+   `data/raw/` is ignored while the repository is public. Zhihao holds it and shares it
+   via the team drive. Agents never need it: build and test only against the synthetic
+   fixture. Running the importer on the real file is the human step below.
    Write the parsing tests against a small synthetic fixture with the same shape
    (`backend/tests/fixtures/linkedin_apify_sample.json`); never commit recruiter data.
 

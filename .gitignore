@@ -19,3 +19,7 @@ graphify-out/
 .idea/
 # Temporary pytest directories if a sandbox interrupts cache creation
 pytest-cache-files-*/
+
+# Scraped job exports stay out of git while the repository is public. Keep them in
+# data/raw/ locally (shared via the team drive) and include them in the final zip.
+data/raw/
