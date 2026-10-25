@@ -190,7 +190,7 @@ sign-in configured first.
 
 ### WP-3 progress note (overnight 2026-10-26)
 
-- Branch: `feat/wp3-discover-api` (from `feat/wp1-sql-003`); commit: (filled in by orchestrator).
+- Branch: `feat/wp3-discover-api` (from `feat/wp1-sql-003`); commit: `94f5428` (build) + `171773a` (review fix round); orchestrator re-ran checks on `171773a`: ruff clean, pytest 78 passed / 82 skipped, disposable DB 160 passed (rebased onto WP-1 17939f8).
 - Delivered `GET /api/discover` (API §7): `backend/app/sql_discover.py` (one statement,
   CTEs `candidate` / `req` / `ranked`, skill lists via `LEFT JOIN LATERAL` for the page only),
   `backend/app/routers/discover.py`, models appended to `schemas.py`, one router line in
