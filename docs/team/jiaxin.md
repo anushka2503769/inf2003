@@ -56,7 +56,7 @@ Inspect current code before work. Append task/result/check/PR/next-step notes he
 
 ### WP-4 progress note (overnight 2026-10-26)
 
-- Branch: `feat/wp4-skill-gap` (from `origin/dev` @ 7e813dd). Commit: (filled in by orchestrator)
+- Branch: `feat/wp4-skill-gap` (from `origin/dev` @ 7e813dd). Commit: `4aaa6c6` (build) + `9aaf52b` (review fix round); orchestrator re-ran checks on `9aaf52b`: ruff clean, pytest 73 passed / 56 skipped, disposable DB 128 passed / 1 xfailed
 - Built: `GET /api/skill-gap/roles` and `GET /api/me/skill-gap` (API.md §8) in
   `backend/app/skill_gap.py` + `backend/app/routers/skill_gap.py`; Mongo `$match` →
   `$facet` (`$count` / `$unwind` → `$group` per job → `$group` per skill → `$sort`)
