@@ -56,7 +56,7 @@ task/PR, integration checks and next milestone notes here without duplicating ev
 ### WP-0 progress note (overnight 2026-10-26)
 
 - Branch: `fix/wp0-dev-proxy-and-read-lock`
-- Commit: (filled in by orchestrator)
+- Commit: `8742c4d` (build) + `67a429c` (review fix round); orchestrator re-ran checks on `67a429c`: ruff clean, pytest 58 passed / 39 skipped, disposable DB 97 passed
 - Changes: recreated `frontend/vite.config.ts` (React plugin, host 127.0.0.1, port 5173,
   `/api` proxy to 127.0.0.1:8000; `vitest.config.ts` kept). Advisory lock split in
   `backend/app/sql_access.py`: `job_read_lock()` (`pg_advisory_xact_lock_shared(2003001)`)
