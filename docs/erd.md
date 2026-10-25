@@ -140,20 +140,31 @@ status into documents just to support filtering. Reassess if dataset size change
   through Python. Token verification, deletion flows and cross-store recovery remain
   implementation work before real student data is accepted.
 
-## Migration 003 — views, triggers, indexes (planned, WP-1)
+## Migration 003 — views, triggers, indexes
 
-File: `DB/003_views_triggers_indexes.sql`. Adds database objects only; no table or column
-changes, so the ER diagram above stays valid.
+File: `DB/003_views_triggers_indexes.sql`, applied after `001` in one transaction. It adds
+database objects only; no table or column changes, so the ER diagram above stays valid.
 
-| Object | Kind | Purpose |
-|---|---|---|
-| `set_updated_at()` + triggers on `users`, `user_jobs` | trigger | Maintain `updated_at` on real changes only (`OLD.* IS DISTINCT FROM NEW.*`) |
-| `user_jobs_requires_active_job` | trigger (non-standard constraint) | A **new** tracker row must reference an active job; later deactivation keeps existing rows valid |
-| `v_job_requirement_counts` | view | `required_total` / `preferred_total` per active job, used by Discover ranking |
-| `v_user_tracker_summary` | view | Tracker counts per user and status |
-| `jobs (job_type, work_arrangement) WHERE is_active` | partial index | Discover filters |
-| `jobs (source_posted_at DESC) WHERE is_active` | partial index | Discover tie-break ordering |
-| `user_jobs (user_id, status)` | index | Tracker tabs and summary |
-
-Views follow 001's access model: revoked from `PUBLIC`/`anon`/`authenticated`, `SELECT`
-granted to `service_role`.
+- **`set_updated_at()`** is a trigger function that stamps `updated_at = now()`. It is
+  attached as `users_set_updated_at` (on `users`) and `user_jobs_set_updated_at` (on
+  `user_jobs`), both `BEFORE UPDATE ... FOR EACH ROW WHEN (OLD.* IS DISTINCT FROM NEW.*)`.
+  An update that changes nothing therefore leaves `updated_at` untouched, and Python no
+  longer has to maintain the column.
+- **`user_jobs_requires_active_job`** is a `BEFORE INSERT` trigger on `user_jobs` (function
+  `user_jobs_require_active_job()`). It is the project's non-standard integrity constraint:
+  a CHECK cannot look at another table, so the trigger raises `check_violation` (SQLSTATE
+  23514) when the referenced job is missing or not `is_active`. Only inserts are guarded;
+  an existing tracker row whose job is deactivated later stays valid and can still be
+  updated.
+- **`v_job_requirement_counts(job_id, required_total, preferred_total)`** counts each active
+  job's `REQUIRED` and `PREFERRED` rows in `job_skills` using `COUNT(*) FILTER`. Inactive
+  jobs, and jobs with no skill rows, do not appear. Discover ranking uses it.
+- **`v_user_tracker_summary(user_id, status, job_count)`** counts a user's `user_jobs` rows
+  per status. Statuses with no rows do not appear.
+- **Indexes.** `jobs_active_type_arrangement_idx` on `jobs (job_type, work_arrangement)` and
+  `jobs_active_posted_at_idx` on `jobs (source_posted_at DESC)` are partial (`WHERE
+  is_active`), so they stay small and serve the Discover filters and ordering.
+  `user_jobs_user_status_idx` on `user_jobs (user_id, status)` serves tracker tabs and the
+  summary view.
+- **Access.** Both views follow 001's model: all privileges revoked from
+  `PUBLIC`/`anon`/`authenticated`, `SELECT` granted to `service_role`.

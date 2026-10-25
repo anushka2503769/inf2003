@@ -165,3 +165,16 @@ sign-in configured first.
   overwrites an existing name), plus the `details.resource` convention; and
   `docs/DB/README.md` needs a line documenting `002`.
 - Confirm Zhihao has access to the Supabase project.
+
+### WP-1 progress note (overnight 2026-10-26)
+
+- Branch: `feat/wp1-sql-003`; commit: (filled in by orchestrator).
+- Delivered `docs/DB/003_views_triggers_indexes.sql`, `backend/tests/test_sql_003.py`, the
+  disposable script now applies 001 then 003 (not 002), and the erd.md "Migration 003" section.
+- Checks: `bash backend/scripts/run_disposable_db_tests.sh` -> 98 passed; ruff check, ruff
+  format --check and plain `pytest` (SQL tests skip) pass.
+- The EXPLAIN test sets `enable_seqscan = off` because the synthetic table is tiny; it proves
+  the partial indexes are usable and chosen, not that the planner picks them unaided.
+- Unverified: not run against Supabase. Human step for Jason: apply 003 to the shared
+  Supabase project and record date and commit in `docs/DB/README.md` (not edited here).
+- Open questions: none.
