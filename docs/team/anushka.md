@@ -126,3 +126,19 @@ assumed from memory of an earlier session):
 - Unverified: no live WP-2/backend integration or manual browser walkthrough; no shared database or network calls were made.
 - Questions: none. Integration can switch to the real adapter when WP-2 is available on dev.
 - Exact real-client switch in `frontend/src/features/tracker/defaultClient.ts`: replace `import { createMockTrackerClient as createTrackerClient } from './mocks'` with `import { createRealTrackerClient as createTrackerClient } from './realClient'`.
+
+
+### WP-8 fix round (2026-10-26)
+
+- Branch: `feat/wp8-vault-ui`.
+- commit: (filled in by orchestrator)
+- Findings 1–3 fixed: status changes on the last page step back and reload; page controls lock during writes; empty states use the filtered visible rows.
+- Finding 4 fixed: accessible inline confirmation supports Cancel, Remove, Escape, initial focus and focus return; DELETE failure leaves the row and confirmation open.
+- Findings 5–6 fixed: posting links require HTTP(S); inactive listings show “No longer listed” while status remains editable.
+- Finding 7 fixed: UI uses `toDisplayMessage`; real adapter preserves `ApiError` status/code/details and 5xx messages are masked.
+- Finding 8 fixed: mock PUT creates known active untracked rows, same-status PUT preserves `updated_at`, changed status advances it, unknown/inactive jobs return 404, and 23 synthetic SAVED rows are seeded.
+- Finding 9 fixed: all six count tabs link to the tab panel and Arrow keys move selection/focus.
+- Missing coverage added: failed status updates restore both row/status and counts; six tab labels/counts are asserted.
+- Checks: `cd frontend && npm test` — 6 files, 70 tests passed. `cd frontend && npm run build` — TypeScript passed; Vite transformed 94 modules and built in 111ms. `git diff --check` passed.
+- Unverified: no live WP-2 backend integration or manual browser walkthrough; no network/shared database calls were made.
+- Questions: none.

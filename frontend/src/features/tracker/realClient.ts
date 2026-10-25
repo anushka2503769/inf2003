@@ -1,59 +1,30 @@
-import { ApiError, request } from '../../lib/api-client'
+import { request } from '../../lib/api-client'
 import type { TrackerClient } from './client'
 import type { TrackerItem, TrackerSummary } from './types'
 
-export interface TrackerClientError {
-  status: number
-  code: string
-  message: string
-  details?: Record<string, unknown>
-}
-
-function toTrackerError(cause: unknown): TrackerClientError {
-  if (cause instanceof ApiError) {
-    return { status: cause.status, code: cause.code, message: cause.message, details: cause.details }
-  }
-  return { status: 0, code: 'network_error', message: 'Something did not work. Try again.' }
-}
-
+/** Adapter over the shared authenticated request; ApiError metadata passes through unchanged. */
 export function createRealTrackerClient(): TrackerClient {
   return {
-    async summary() {
-      try {
-        return await request<TrackerSummary>('/me/jobs/summary')
-      } catch (cause) {
-        throw toTrackerError(cause)
-      }
+    summary() {
+      return request<TrackerSummary>('/me/jobs/summary')
     },
-    async list(status, limit, offset) {
-      try {
-        const params = new URLSearchParams()
-        if (status !== undefined) {
-          for (const value of Array.isArray(status) ? status : [status]) params.append('status', value)
-        }
-        params.set('limit', String(limit))
-        params.set('offset', String(offset))
-        return await request<{ items: TrackerItem[]; total: number }>(`/me/jobs?${params.toString()}`)
-      } catch (cause) {
-        throw toTrackerError(cause)
+    list(status, limit, offset) {
+      const params = new URLSearchParams()
+      if (status !== undefined) {
+        for (const value of Array.isArray(status) ? status : [status]) params.append('status', value)
       }
+      params.set('limit', String(limit))
+      params.set('offset', String(offset))
+      return request<{ items: TrackerItem[]; total: number }>(`/me/jobs?${params.toString()}`)
     },
-    async update(jobId, status) {
-      try {
-        return await request<TrackerItem>(`/me/jobs/${encodeURIComponent(jobId)}`, {
-          method: 'PUT',
-          body: { status },
-        })
-      } catch (cause) {
-        throw toTrackerError(cause)
-      }
+    update(jobId, status) {
+      return request<TrackerItem>(`/me/jobs/${encodeURIComponent(jobId)}`, {
+        method: 'PUT',
+        body: { status },
+      })
     },
-    async remove(jobId) {
-      try {
-        await request<void>(`/me/jobs/${encodeURIComponent(jobId)}`, { method: 'DELETE' })
-      } catch (cause) {
-        throw toTrackerError(cause)
-      }
+    remove(jobId) {
+      return request<void>(`/me/jobs/${encodeURIComponent(jobId)}`, { method: 'DELETE' })
     },
   }
 }

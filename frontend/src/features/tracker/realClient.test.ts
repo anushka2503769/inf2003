@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
+import { ApiError } from '../../lib/api-client'
 import { createRealTrackerClient } from './realClient'
 
 function fakeFetch(handler: (url: string, init: RequestInit) => Response): void {
@@ -62,7 +63,8 @@ describe('real tracker client', () => {
       error: { code: 'not_found', message: 'Job not found.', details: { resource: 'job' } },
     }))
 
-    await expect(createRealTrackerClient().update('missing', 'SAVED')).rejects.toEqual({
+    await expect(createRealTrackerClient().update('missing', 'SAVED')).rejects.toBeInstanceOf(ApiError)
+    await expect(createRealTrackerClient().update('missing', 'SAVED')).rejects.toMatchObject({
       status: 404, code: 'not_found', message: 'Job not found.', details: { resource: 'job' },
     })
   })

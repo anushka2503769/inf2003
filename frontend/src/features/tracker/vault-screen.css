@@ -117,3 +117,21 @@
     justify-content: flex-start;
   }
 }
+
+.vault__confirm {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  padding: 0.5rem;
+  border: 1px solid var(--stamp);
+}
+
+.vault__inactive {
+  display: inline-block;
+  border: 1px solid var(--stamp);
+  padding: 0.05rem 0.35rem;
+  color: var(--stamp);
+  font-size: var(--step-1);
+  font-weight: 600;
+}
