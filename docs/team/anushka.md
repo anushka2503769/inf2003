@@ -116,3 +116,13 @@ assumed from memory of an earlier session):
   (profile shell), not touched here.
 - No PR into `dev` exists yet for the skill-editor frontend work itself
   (`realClient.ts` + the `skillsApi` addition below) — opening one is next.
+
+### WP-8 progress note (overnight 2026-10-26)
+
+- Branch: `feat/wp8-vault-ui`.
+- commit: (filled in by orchestrator)
+- Result: Vault tracker screen, contract-shaped stateful mock, and real shared-transport adapter implemented. Current default remains MOCK.
+- Checks: `cd frontend && npm test` — 6 files, 58 tests passed. `cd frontend && npm run build` — TypeScript and Vite production build passed (94 modules transformed).
+- Unverified: no live WP-2/backend integration or manual browser walkthrough; no shared database or network calls were made.
+- Questions: none. Integration can switch to the real adapter when WP-2 is available on dev.
+- Exact real-client switch in `frontend/src/features/tracker/defaultClient.ts`: replace `import { createMockTrackerClient as createTrackerClient } from './mocks'` with `import { createRealTrackerClient as createTrackerClient } from './realClient'`.
