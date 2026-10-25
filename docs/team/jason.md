@@ -187,3 +187,21 @@ sign-in configured first.
   SQL, not solved.
 - 003 was edited in place; it has not been applied to Supabase yet, so no new migration.
 - Regression tests added for the exact upsert statement; commit: (filled in by orchestrator).
+
+### WP-2 progress note (overnight 2026-10-26)
+
+- Branch: `feat/wp2-tracker-api`; commit: (filled in by orchestrator).
+- Delivered `sql_tracker.py`, `routers/tracker.py`, tracker models appended to `schemas.py`,
+  one `include_router` line (plus the router import) in `main.py`, and route + disposable-DB
+  SQL tests.
+- Checks: `bash backend/scripts/run_disposable_db_tests.sh` -> 131 passed; ruff check, ruff
+  format --check pass; plain `pytest` -> 71 passed, 60 skipped.
+- Deviation from the PRD wording: `PUT` is one statement but not a bare `INSERT ... ON CONFLICT`.
+  PostgreSQL fires the BEFORE INSERT active-job trigger before conflict detection, so a bare
+  upsert would reject updates of rows whose job went inactive. The statement is a CTE: UPDATE
+  first, INSERT ... ON CONFLICT DO UPDATE only if nothing matched.
+- `GET /api/me/jobs` and `/summary` for a user with no profile return empty/zero (no 404);
+  API.md only specifies 404 `profile` for PUT and DELETE.
+- Unverified: not run against Supabase. Human step for Jason: apply migration 003 to the shared
+  Supabase project before merging this branch (the route relies on its trigger and view).
+- Open questions: should GET list/summary return 404 `profile` when there is no profile?
