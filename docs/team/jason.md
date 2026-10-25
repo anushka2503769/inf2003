@@ -168,7 +168,7 @@ sign-in configured first.
 
 ### WP-1 progress note (overnight 2026-10-26)
 
-- Branch: `feat/wp1-sql-003`; commit: (filled in by orchestrator).
+- Branch: `feat/wp1-sql-003`; commit: `7fa1ef6` (build) + `17939f8` (review fix round); orchestrator re-ran checks on `17939f8`: ruff clean, pytest 51 passed / 51 skipped, disposable DB 102 passed.
 - Delivered `docs/DB/003_views_triggers_indexes.sql`, `backend/tests/test_sql_003.py`, the
   disposable script now applies 001 then 003 (not 002), and the erd.md "Migration 003" section.
 - Checks: `bash backend/scripts/run_disposable_db_tests.sh` -> 98 passed; ruff check, ruff
@@ -186,4 +186,4 @@ sign-in configured first.
   inactive jobs still fail with 23514. Concurrent DELETE plus upsert race is documented in the
   SQL, not solved.
 - 003 was edited in place; it has not been applied to Supabase yet, so no new migration.
-- Regression tests added for the exact upsert statement; commit: (filled in by orchestrator).
+- Regression tests added for the exact upsert statement; commit: `7fa1ef6` (build) + `17939f8` (review fix round); orchestrator re-ran checks on `17939f8`: ruff clean, pytest 51 passed / 51 skipped, disposable DB 102 passed.
