@@ -44,7 +44,7 @@ from .job_pdf import _extract_company_name
 # ---------------------------------------------------------------------------
 # Shared field inference (job_type, work_arrangement, location, posted date)
 # ---------------------------------------------------------------------------
-_INTERN_RE = re.compile(r"\b(intern|interns|internship|internships|praktik\w*)\b", re.IGNORECASE)
+_INTERN_RE = re.compile(r"\b(?:intern(?:s|ships?)?(?![a-z])|praktik\w*)", re.IGNORECASE)
 _PART_TIME_RE = re.compile(r"\bpart[\s_-]?time\b", re.IGNORECASE)
 _FULL_TIME_RE = re.compile(r"\bfull[\s_-]?time\b", re.IGNORECASE)
 _HYBRID_RE = re.compile(r"\bhybrid\b", re.IGNORECASE)

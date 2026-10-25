@@ -283,7 +283,7 @@ from contextlib import contextmanager  # noqa: E402
 from datetime import datetime, timezone  # noqa: E402
 from pathlib import Path  # noqa: E402
 
-from pymongo.errors import PyMongoError  # noqa: E402
+from pymongo.errors import PyMongoError, WriteError  # noqa: E402
 
 from app import job_sources  # noqa: E402
 
@@ -744,6 +744,122 @@ def test_ingest_cli_namespace_has_no_env_loading() -> None:
     source = Path(script.__file__).read_text(encoding="utf-8")
     assert "dotenv" not in source and "load_dotenv" not in source
     assert isinstance(script.parse_args([]), argparse.Namespace)
+
+
+class _WriteErrorCollection(_FakeMongoCollection):
+    """Raises a Mongo schema-validation error for the listed job ids (all if None)."""
+
+    def __init__(self, bad_ids=None):
+        super().__init__()
+        self.bad_ids = bad_ids
+
+    def replace_one(self, query, document, upsert=False):
+        if self.bad_ids is None or document["job_id"] in self.bad_ids:
+            raise WriteError("Document failed validation", code=121)
+        return super().replace_one(query, document, upsert)
+
+
+def _synthetic_job(external_id: str) -> dict:
+    return {
+        "source": "synthetic",
+        "external_job_id": external_id,
+        "title": "Engineer",
+        "company": "Example Co",
+        "url": f"https://example.test/{external_id}",
+    }
+
+
+def _run_route(monkeypatch, collection, records):
+    monkeypatch.setitem(job_sources.SOURCE_REGISTRY, "synthetic", lambda limit: records)
+    return jobs_external_multi.fetch_and_store_jobs_multi(
+        _FakeMongoDb(collection), sources=["synthetic"], limit_per_source=5, total_limit=None
+    )
+
+
+def test_all_validation_failures_return_422(monkeypatch) -> None:
+    collection = _WriteErrorCollection()
+    _install_fake_stores(monkeypatch)
+    with pytest.raises(ApiError) as caught:
+        _run_route(monkeypatch, collection, [_synthetic_job("a"), _synthetic_job("b")])
+    assert caught.value.status_code == 422
+    assert caught.value.details["summary"]["rejected"] == 2
+
+
+def test_all_storage_failures_return_503(monkeypatch) -> None:
+    collection = _FakeMongoCollection(fail_for={str(UUID(int=1)), str(UUID(int=2))})
+    _install_fake_stores(monkeypatch)
+    with pytest.raises(ApiError) as caught:
+        _run_route(monkeypatch, collection, [_synthetic_job("a"), _synthetic_job("b")])
+    assert caught.value.status_code == 503
+
+
+def test_mixed_validation_and_storage_failures_return_503(monkeypatch) -> None:
+    # first job: schema validation (422-class); second: Mongo outage; nothing stored.
+    collection = _WriteErrorCollection(bad_ids={str(UUID(int=1))})
+    collection.fail_for = {str(UUID(int=2))}
+    _install_fake_stores(monkeypatch)
+    with pytest.raises(ApiError) as caught:
+        _run_route(monkeypatch, collection, [_synthetic_job("a"), _synthetic_job("b")])
+    assert caught.value.status_code == 503
+    # With one job stored the batch succeeds and reports the rejection.
+    collection = _WriteErrorCollection(bad_ids={str(UUID(int=1))})
+    _install_fake_stores(monkeypatch)
+    response = _run_route(monkeypatch, collection, [_synthetic_job("a"), _synthetic_job("b")])
+    assert (response.summary.inserted, response.summary.rejected) == (1, 1)
+
+
+@pytest.mark.parametrize(
+    "title,expected",
+    [
+        ("Internship2026", "INTERNSHIP"),
+        ("Summer Intern", "INTERNSHIP"),
+        ("INTERNS wanted", "INTERNSHIP"),
+        ("Software Engineering Internship", "INTERNSHIP"),
+        ("Internal Audit Analyst", None),
+        ("International Sales", None),
+    ],
+)
+def test_intern_title_matching(title: str, expected) -> None:
+    assert job_sources.infer_job_type(title) == expected
+
+
+@pytest.mark.xfail(
+    strict=True,
+    reason="Re-extraction (jobs_extraction_router._extract_one) rebuilds context from raw_jd "
+    "only, so a LinkedIn job loses its imported industry. Needs a router/extraction change.",
+)
+def test_reextraction_keeps_imported_linkedin_industry(monkeypatch) -> None:
+    from app import jobs_extraction_router as router
+
+    monkeypatch.setattr(
+        job_skill_extraction, "match_skills_with_ids", lambda text, *, require_database: []
+    )
+    jobs, _ = job_sources.load_linkedin_apify_file(LINKEDIN_FIXTURE)
+    collection, _ = _install_fake_stores(monkeypatch)
+    # keep the fake SQL layer but run the real extraction on import and re-extraction
+    monkeypatch.setattr(
+        jobs_external_multi, "extract_skills_from_job", job_skill_extraction.extract_skills_from_job
+    )
+    stored, _s, _n = jobs_external_multi._ingest(_FakeMongoDb(collection), [jobs[0]], [])
+    assert stored  # real extraction ran during import (skill matching faked empty)
+    job_id = str(stored[0].job_id)
+    document = dict(collection.documents[job_id], _id="doc-1")
+    assert document["extracted_data"]["industry"] == "IT Services and IT Consulting"
+
+    class _Db:
+        def __getitem__(self, name):
+            return self
+
+        def update_one(self, query, update):
+            for key, value in update["$set"].items():
+                if key == "extracted_data":
+                    document["extracted_data"] = value
+
+    monkeypatch.setattr(router, "ensure_sql_job_exists", lambda _id: None)
+    monkeypatch.setattr(router, "set_job_active", lambda *_: None)
+    monkeypatch.setattr(router, "replace_job_skills", lambda *_: None)
+    router._extract_one(_Db(), document)
+    assert document["extracted_data"]["industry"] == "IT Services and IT Consulting"
 
 
 # --- SQL columns against a disposable database (skipped without TEST_DATABASE_URL) ---

@@ -5,14 +5,14 @@ from datetime import datetime, timezone
 from typing import List, Optional, Sequence
 
 from fastapi import APIRouter, Query
-from pydantic import BaseModel
 from pymongo.errors import PyMongoError, WriteError
 
 from .dependencies import AdminJobDatabase
 from .errors import ApiError
-from .job_fetch_schemas import FetchedJobSummary, FetchJobsResponse
+from .job_fetch_schemas import FetchedJobSummary
 from .job_skill_extraction import extract_skills_from_job
 from .job_sources import SOURCE_REGISTRY, ProviderJobError, collect_provider_jobs
+from .schemas import FetchJobsWithSummaryResponse, FetchSummary
 from .sql_access import (
     SqlAccessError,
     set_job_active,
@@ -22,18 +22,6 @@ from .sql_access import (
 router = APIRouter(prefix="/api/jobs/external", tags=["jobs-external"])
 
 MAX_REPORTED_ERRORS = 50
-
-
-class FetchSummary(BaseModel):
-    requested: int
-    inserted: int
-    updated: int
-    rejected: int
-    errors: List[str]
-
-
-class FetchJobsWithSummaryResponse(FetchJobsResponse):
-    summary: FetchSummary
 
 
 @router.post("/fetch-multi", response_model=FetchJobsWithSummaryResponse)
@@ -58,12 +46,15 @@ def fetch_and_store_jobs_multi(
         raise ApiError(
             502, "service_unavailable", "No valid jobs were returned by the requested source."
         )
-    stored, summary = ingest_provider_jobs(db, all_jobs, rejected_errors)
+    stored, summary, storage_failures = _ingest(db, all_jobs, rejected_errors)
     if not stored:
-        every_record_invalid = summary.rejected == len(rejected_errors)
+        # Nothing was stored. Any storage/outage failure makes this a retryable 503;
+        # only when every rejection was a validation failure (records refused before
+        # storage, or Mongo schema validation = 422) is it a 422.
+        all_validation = storage_failures == 0
         raise ApiError(
-            422 if every_record_invalid else 503,
-            "validation_failed" if every_record_invalid else "service_unavailable",
+            422 if all_validation else 503,
+            "validation_failed" if all_validation else "service_unavailable",
             "No provider job could be stored; see details.summary.errors.",
             {"summary": summary.model_dump()},
         )
@@ -73,6 +64,13 @@ def fetch_and_store_jobs_multi(
 def ingest_provider_jobs(
     db: object, jobs: List[dict], rejected_errors: Sequence[str] = ()
 ) -> tuple[list[FetchedJobSummary], FetchSummary]:
+    stored, summary, _ = _ingest(db, jobs, rejected_errors)
+    return stored, summary
+
+
+def _ingest(
+    db: object, jobs: List[dict], rejected_errors: Sequence[str] = ()
+) -> tuple[list[FetchedJobSummary], FetchSummary, int]:
     """
     Store validated provider jobs one at a time. A record that fails is counted in
     `rejected` with a short message and the rest continue. `rejected_errors` are
@@ -82,12 +80,14 @@ def ingest_provider_jobs(
     stored: list[FetchedJobSummary] = []
     errors: list[str] = list(rejected_errors)
     rejected = len(errors)
-    inserted = updated = 0
+    inserted = updated = storage_failures = 0
     for job in jobs:
         try:
             summary, was_inserted = _store_job(db, job)
         except Exception as exc:
             rejected += 1
+            if not (isinstance(exc, ApiError) and exc.status_code == 422):
+                storage_failures += 1
             errors.append(_describe_failure(job, exc))
             continue
         stored.append(summary)
@@ -95,12 +95,16 @@ def ingest_provider_jobs(
             inserted += 1
         else:
             updated += 1
-    return stored, FetchSummary(
-        requested=len(jobs) + len(rejected_errors),
-        inserted=inserted,
-        updated=updated,
-        rejected=rejected,
-        errors=errors[:MAX_REPORTED_ERRORS],
+    return (
+        stored,
+        FetchSummary(
+            requested=len(jobs) + len(rejected_errors),
+            inserted=inserted,
+            updated=updated,
+            rejected=rejected,
+            errors=errors[:MAX_REPORTED_ERRORS],
+        ),
+        storage_failures,
     )
 
 

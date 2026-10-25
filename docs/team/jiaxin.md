@@ -72,3 +72,19 @@ Inspect current code before work. Append task/result/check/PR/next-step notes he
 - Exit code: 1 when nothing was inserted or updated and there was an error (or no jobs were found),
   or on an unrecoverable exception; 0 otherwise (partial failures still print their errors).
 - Open question: `API.md` section 9 now documents `summary` (shape change). See the report.
+
+#### WP-5 fix round (overnight 2026-10-26)
+
+- Nothing-stored status rule: 422 only if every rejection was validation (pre-storage or Mongo
+  schema validation); any storage/outage rejection makes it 503 (API.md section 9 updated).
+- Intern matching: `intern`, `interns`, `internship(s)` not followed by a letter, so
+  "Internship2026" matches while "Internal"/"International" do not. Open question for Zhihao:
+  this deviates from the literal "title contains intern".
+- `FetchSummary` / `FetchJobsWithSummaryResponse` moved to `backend/app/schemas.py` (appended).
+- Open question (strict xfail `test_reextraction_keeps_imported_linkedin_industry`): re-extraction
+  (`backend/app/jobs_extraction_router.py` `_extract_one`) calls `extract_skills_from_job(doc["raw_jd"])`
+  with plain `descriptionText`, so imported industry and title context are lost (industry becomes
+  "Unclassified"). Required change outside WP-5 files: in `_extract_one`, build the extraction input from the
+  stored document (e.g. prefix the title from `extracted_data.provider.title`) and, after extraction, keep
+  the existing `extracted_data.industry` when the new value is "Unclassified" (or when the document's source is
+  `linkedin_apify`).

@@ -98,3 +98,18 @@ class ResumeUploadResponse(BaseModel):
     file_name: str
     uploaded_at: datetime
     extracted_data: ExtractedData
+
+
+from .job_fetch_schemas import FetchJobsResponse  # noqa: E402
+
+
+class FetchSummary(BaseModel):
+    requested: int
+    inserted: int
+    updated: int
+    rejected: int
+    errors: list[str]
+
+
+class FetchJobsWithSummaryResponse(FetchJobsResponse):
+    summary: FetchSummary

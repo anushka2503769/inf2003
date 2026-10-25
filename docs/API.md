@@ -205,7 +205,7 @@ advisory lock (shared for reads, exclusive for writes after WP-0).
 | `GET /api/jobs/search?title&limit` | user | `$text` search, regex fallback |
 | `GET /api/jobs/stats` | user | counts by role, industry, source |
 | `GET /api/jobs/{job_id}` | user | ready + active only |
-| `POST /api/jobs/external/fetch-multi` | admin | `{sources[], limit_per_source, total_limit}`. Records are processed independently: a bad record is counted in `rejected` and skipped. Response adds `summary {requested, inserted, updated, rejected, errors[]}` next to `fetched_count` and `jobs[]` (`errors[]` are short per-record messages, at most 50). If no record could be stored the route returns 422 (every record invalid) or 503 (storage failure) with `error.details.summary`. |
+| `POST /api/jobs/external/fetch-multi` | admin | `{sources[], limit_per_source, total_limit}`. Records are processed independently: a bad record is counted in `rejected` and skipped. Response adds `summary {requested, inserted, updated, rejected, errors[]}` next to `fetched_count` and `jobs[]` (`errors[]` are short per-record messages, at most 50). If no record could be stored the route returns 422 when every rejection was a validation failure (invalid record, or MongoDB schema validation) and 503 when at least one rejection was a storage or outage failure, with `error.details.summary`. |
 | `POST /api/jobs/ingest` | admin | `{job_id, raw_jd}` for an existing SQL job |
 | `POST /api/jobs/{job_id}/extract-skills` | admin | re-extract one job |
 | `POST /api/jobs/extract-skills/batch` | admin | re-extract all |
