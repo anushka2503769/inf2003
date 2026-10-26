@@ -6,7 +6,7 @@ as JSON and exits non-zero on total failure.
     cd backend
     # keyless provider APIs
     uv run --env-file .env python scripts/ingest_jobs.py \
-        --sources arbeitnow devitjobs_uk --limit-per-source 200
+        --sources arbeitnow ai_dev_jobs --limit-per-source 200
     # the LinkedIn export written by scripts/fetch_linkedin_apify.py (no network call)
     uv run --env-file .env python scripts/ingest_jobs.py --file ../data/raw/linkedin_sg_<date>.json
 

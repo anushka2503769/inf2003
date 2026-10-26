@@ -342,25 +342,6 @@ def test_arbeitnow_normalizer_fields(monkeypatch) -> None:
     assert bare["source_posted_at"] is None
 
 
-def test_devitjobs_normalizer_fields(monkeypatch) -> None:
-    xml = (FIXTURES / "devitjobs_uk_sample.xml").read_bytes()
-    monkeypatch.setattr(job_sources.requests, "get", lambda *a, **k: _FakeResponse(content=xml))
-    intern, remote, bare = job_sources.fetch_devitjobs_uk(10)
-    assert (intern["location"], intern["job_type"], intern["work_arrangement"]) == (
-        "Leeds (Hybrid)",
-        "INTERNSHIP",
-        "HYBRID",
-    )
-    assert intern["source_posted_at"] == "2026-10-12T00:00:00+00:00"
-    assert (remote["location"], remote["job_type"], remote["work_arrangement"]) == (
-        "Remote, UK",
-        "FULL_TIME",
-        "REMOTE",
-    )
-    assert remote["source_posted_at"] is None
-    assert (bare["location"], bare["job_type"], bare["work_arrangement"]) == (None, None, None)
-
-
 def test_ai_dev_jobs_normalizer_fields_and_unreadable_record(monkeypatch) -> None:
     payload = _fixture_json("ai_dev_jobs_sample.json")
 
@@ -627,9 +608,9 @@ def test_ingest_cli_argument_parsing() -> None:
     default = script.parse_args([])
     assert default.sources == ["arbeitnow"] and default.file is None
     parsed = script.parse_args(
-        ["--sources", "arbeitnow", "devitjobs_uk", "--limit-per-source", "200"]
+        ["--sources", "arbeitnow", "ai_dev_jobs", "--limit-per-source", "200"]
     )
-    assert parsed.sources == ["arbeitnow", "devitjobs_uk"] and parsed.limit_per_source == 200
+    assert parsed.sources == ["arbeitnow", "ai_dev_jobs"] and parsed.limit_per_source == 200
     assert script.parse_args(["--file", "export.json"]).file == Path("export.json")
     with pytest.raises(SystemExit):
         script.parse_args(["--file", "export.json", "--sources", "arbeitnow"])
@@ -676,12 +657,12 @@ def test_ingest_cli_sources_use_the_same_pipeline(monkeypatch) -> None:
     collection, _ = _install_fake_stores(monkeypatch)
     printed: list[str] = []
     code = script.run(
-        script.parse_args(["--sources", "arbeitnow", "devitjobs_uk", "--limit-per-source", "200"]),
+        script.parse_args(["--sources", "arbeitnow", "ai_dev_jobs", "--limit-per-source", "200"]),
         collect=fake_collect,
         stores=_fake_stores(_FakeMongoDb(collection)),
         out=printed.append,
     )
-    assert calls == [(["arbeitnow", "devitjobs_uk"], 200)]
+    assert calls == [(["arbeitnow", "ai_dev_jobs"], 200)]
     assert code == 0  # partial failure is not total failure
     assert json.loads(printed[-1])["rejected"] == 1
 

@@ -23,17 +23,9 @@ then register it in SOURCE_REGISTRY at the bottom of this file.
 import json
 import re
 import time
-import xml.etree.ElementTree as ET
 from datetime import date, datetime, timezone
 from email.utils import parsedate_to_datetime
 from pathlib import Path
-
-try:
-    from lxml import etree as lxml_etree
-
-    _LXML_AVAILABLE = True
-except ImportError:
-    _LXML_AVAILABLE = False
 from typing import Any, Callable, Dict, List
 
 import requests
@@ -206,79 +198,6 @@ def normalize_arbeitnow_job(job: Dict[str, Any]) -> Dict[str, Any]:
         "responsibilities": extract_list_items(raw_description),
         "source": "arbeitnow",
         "external_job_id": job.get("id") or job.get("slug"),
-    }
-
-
-# ---------------------------------------------------------------------------
-# DevITjobs UK (XML feed, no API key) - https://devitjobs.uk/job_feed.xml
-# ---------------------------------------------------------------------------
-DEVITJOBS_UK_FEED_URL = "https://devitjobs.uk/job_feed.xml"
-
-
-def fetch_devitjobs_uk(limit: int = 5) -> List[Dict[str, Any]]:
-    headers = {"User-Agent": "Mozilla/5.0 (compatible; jobless-simulator/1.0)"}
-    response = requests.get(DEVITJOBS_UK_FEED_URL, headers=headers, timeout=10)
-    response.raise_for_status()
-
-    if _LXML_AVAILABLE:
-        # lxml's recover=True tolerates malformed XML (unescaped &, bad
-        # control chars, etc.) that this feed sometimes contains, instead
-        # of failing the whole fetch on one bad character.
-        parser = lxml_etree.XMLParser(recover=True)
-        root = lxml_etree.fromstring(response.content, parser=parser)
-    else:
-        # Fallback: standard library, which will raise ParseError on
-        # malformed XML. Install lxml (uv add lxml) for more resilient parsing.
-        root = ET.fromstring(response.content)
-    job_elements = root.findall(".//job")[:limit]
-    return [_safe(normalize_devitjobs_uk_job, job_el, "devitjobs_uk") for job_el in job_elements]
-
-
-def _first_text(element: Any, *names: str) -> str:
-    for name in names:
-        value = (element.findtext(name) or "").strip()
-        if value:
-            return value
-    return ""
-
-
-def normalize_devitjobs_uk_job(job_el: Any) -> Dict[str, Any]:
-    # The feed's date/type element names are not documented; the usual candidates
-    # are tried and anything not found simply stays null.
-    title = (job_el.findtext("title") or "Untitled Role").strip()
-    company = (job_el.findtext("company") or "Unknown Company").strip()
-    location = clean_location(job_el.findtext("location"))
-    external_id = (job_el.findtext("id") or job_el.findtext("job_id") or "").strip()
-    application_url = (job_el.findtext("url") or job_el.findtext("link") or "").strip()
-    salary = (job_el.findtext("salary") or "").strip()
-    raw_description = job_el.findtext("description") or ""
-    description = strip_html_to_text(raw_description)
-    workplace = _first_text(job_el, "workplace", "work_arrangement", "remote")
-    remote = "remote" in (location or "").lower() or workplace.lower() in {
-        "remote",
-        "true",
-        "yes",
-        "1",
-    }
-    job_type_text = _first_text(job_el, "jobtype", "job_type", "employment_type", "type")
-    return {
-        "title": title,
-        "company": company,
-        "location": location,
-        "remote": remote,
-        "job_type": infer_job_type(title, job_type_text),
-        "work_arrangement": infer_work_arrangement(
-            workplace, title, location, description, remote_flag=remote
-        ),
-        "source_posted_at": parse_posted_at(
-            _first_text(job_el, "pubdate", "published", "date", "posted", "created_at")
-        ),
-        "tags": [salary] if salary else [],  # no dedicated tags field in this feed
-        "url": application_url,
-        "description": description,
-        "responsibilities": extract_list_items(raw_description),
-        "source": "devitjobs_uk",
-        "external_job_id": external_id,
     }
 
 
@@ -457,7 +376,6 @@ def load_linkedin_apify_file(path: str | Path) -> tuple[List[Dict[str, Any]], Li
 # ---------------------------------------------------------------------------
 SOURCE_REGISTRY: Dict[str, Callable[[int], List[Dict[str, Any]]]] = {
     "arbeitnow": fetch_arbeitnow,
-    "devitjobs_uk": fetch_devitjobs_uk,
     "ai_dev_jobs": fetch_ai_dev_jobs,
 }
 
