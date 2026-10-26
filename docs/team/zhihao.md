@@ -111,7 +111,7 @@ task/PR, integration checks and next milestone notes here without duplicating ev
 
 ### WP-10 progress note (2026-10-26)
 
-- Branch: `feat/wp10-benchmark`. commit: (filled in by orchestrator)
+- Branch: `feat/wp10-benchmark`. commit: 3c1361b
 - Added `backend/scripts/seed_synthetic.py`, `benchmark.py`, `bench_server.py`, `run_benchmark.sh`,
   `backend/tests/test_benchmark_helpers.py`, `docs/perf/README.md` and
   `docs/perf/results-2026-10-26.md` (output of `bash backend/scripts/run_benchmark.sh`, 5,000 and
