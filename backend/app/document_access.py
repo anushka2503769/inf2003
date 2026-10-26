@@ -2,6 +2,7 @@
 
 from typing import Any
 
+from pymongo import ReturnDocument
 from pymongo.database import Database
 
 
@@ -31,13 +32,14 @@ def provider_extracted_data(extracted: dict[str, Any], job: dict[str, Any]) -> d
 
 def replace_current_resume(db: Database, document: dict[str, Any]) -> dict[str, Any]:
     """Atomically replace the one current resume protected by the unique user index."""
-    collection = db["resume_documents"]
-    result = collection.replace_one({"user_id": document["user_id"]}, document, upsert=True)
-    if result.upserted_id is not None:
-        document = dict(document)
-        document["_id"] = result.upserted_id
-        return document
-    stored = collection.find_one({"user_id": document["user_id"]})
+    # One atomic call returns the document this request wrote. A separate find_one after
+    # replace_one could return a concurrent upload's document instead.
+    stored = db["resume_documents"].find_one_and_replace(
+        {"user_id": document["user_id"]},
+        document,
+        upsert=True,
+        return_document=ReturnDocument.AFTER,
+    )
     if stored is None:
         raise RuntimeError("MongoDB did not return the replaced resume document.")
     return stored

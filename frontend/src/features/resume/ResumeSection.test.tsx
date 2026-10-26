@@ -164,6 +164,22 @@ describe('suggested skills', () => {
     expect(reload).toHaveBeenCalledTimes(2)
   })
 
+  it('clears "did not refresh" once a Reload succeeds', async () => {
+    let reloads = 0
+    const reload = vi.fn(async () => {
+      if (reloads++ === 0) throw new Error('reload failed')
+      return undefined
+    })
+    mount(resumeClient({ current: vi.fn(async () => resume()) }), skillsClient(), reload)
+    await screen.findByText('Skills found in your resume')
+    fireEvent.click(screen.getByRole('button', { name: 'Add selected (3)' }))
+    expect(await screen.findByText('The list did not refresh.')).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Reload' }))
+    await waitFor(() => expect(screen.queryByText('The list did not refresh.')).not.toBeInTheDocument())
+    expect(reload).toHaveBeenCalledTimes(2)
+  })
+
   it('marks skills that are already confirmed as added', async () => {
     render(
       <ResumeSection

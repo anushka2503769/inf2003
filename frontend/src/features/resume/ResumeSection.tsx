@@ -147,12 +147,17 @@ export function ResumeSection({
         setRows(previous => ({ ...previous, [skillId]: 'failed' }))
       }
     }
+    await reloadProfile()
+    setAdding(false)
+  }
+
+  async function reloadProfile() {
     try {
       await onProfileReload()
+      setReloadError(false)
     } catch {
       setReloadError(true)
     }
-    setAdding(false)
   }
 
   const pending = suggestions.filter(
@@ -268,7 +273,7 @@ export function ResumeSection({
                 </div>
               ) : null}
               {reloadError ? (
-                <InlineError actionLabel="Reload" onAction={() => void onProfileReload().catch(() => undefined)}>
+                <InlineError actionLabel="Reload" onAction={() => void reloadProfile()}>
                   The list did not refresh.
                 </InlineError>
               ) : null}
