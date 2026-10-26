@@ -345,4 +345,23 @@ describe('DiscoverFeed', () => {
     render(<MemoryRouter><DiscoverFeed client={client} onProfileMissing={reload} /></MemoryRouter>)
     await waitFor(() => expect(reload).toHaveBeenCalledTimes(1))
   })
+
+  it('opens the mobile filter sheet as a modal dialog, locks page scroll, and Escape closes it back to Filters', async () => {
+    const user = userEvent.setup()
+    renderFeed(makeClient())
+    const filters = await screen.findByRole('button', { name: 'Filters' })
+    expect(filters).toHaveAttribute('aria-expanded', 'false')
+
+    await user.click(filters)
+    const sheet = screen.getByRole('dialog', { name: 'Filters' })
+    expect(sheet).toHaveAttribute('aria-modal', 'true')
+    expect(filters).toHaveAttribute('aria-expanded', 'true')
+    expect(document.body.style.overflow).toBe('hidden')
+    expect(sheet).toContainElement(document.activeElement as HTMLElement)
+
+    await user.keyboard('{Escape}')
+    expect(screen.queryByRole('dialog', { name: 'Filters' })).not.toBeInTheDocument()
+    expect(document.body.style.overflow).toBe('')
+    expect(filters).toHaveFocus()
+  })
 })

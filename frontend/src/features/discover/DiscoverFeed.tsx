@@ -453,9 +453,13 @@ export function DiscoverFeed({ client = discoverClient, onProfileMissing }: {
     const query = typeof window.matchMedia === 'function' ? window.matchMedia(MOBILE_QUERY) : null
     const onWiden = () => { if (query && !query.matches) setSheetOpen(false) }
     query?.addEventListener('change', onWiden)
+    // The page behind the sheet must not scroll while it is open.
+    const previousOverflow = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
     return () => {
       document.removeEventListener('keydown', onSheetKey)
       query?.removeEventListener('change', onWiden)
+      document.body.style.overflow = previousOverflow
     }
   }, [sheetOpen, closeSheet])
 
