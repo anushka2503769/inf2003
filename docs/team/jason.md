@@ -249,7 +249,7 @@ sign-in configured first.
 
 ### WP-6 progress note (2026-10-26)
 
-- Branch: `feat/wp6-resume-skills`. Commit: (filled in by orchestrator).
+- Branch: `feat/wp6-resume-skills`. Commit: `3b21a0e` (merged with dev in `fc9fbc6`).
 - Backend: upload now checks the profile (404 `not_found`, `details.resource` "profile") before text or skill
   extraction; the response carries `suggested_skills` (case-insensitive exact name to dictionary id, minus
   confirmed skills, no duplicates, ordered by name, unknown names dropped). New `GET /api/me/resume`

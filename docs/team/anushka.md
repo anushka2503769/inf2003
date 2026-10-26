@@ -220,7 +220,7 @@ assumed from memory of an earlier session):
 
 ### WP-6 progress note (2026-10-26)
 
-- Branch: `feat/wp6-resume-skills`. Commit: (filled in by orchestrator).
+- Branch: `feat/wp6-resume-skills`. Commit: `3b21a0e` (merged with dev in `fc9fbc6`).
 - Profile screen "Resume and skills" now has upload (PDF/DOCX up to 5 MB, checked in the browser), current file
   name and upload time ("No resume yet" on 404), a ticked-by-default checklist of suggested skills, "Add selected"
   (sequential `PUT /api/me/skills/{id}`, a failed one shows "Not saved" with Retry, then the profile reloads) and
