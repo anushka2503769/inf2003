@@ -70,11 +70,11 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
 
 @contextmanager
 def open_stores() -> Iterator[object]:
-    """Hold the job pipeline lock and yield the MongoDB database, as the admin route does."""
+    """Hold the exclusive job write lock and yield the MongoDB database, as the admin route does."""
     from app.db import get_db
-    from app.sql_access import job_pipeline_lock
+    from app.sql_access import job_write_lock
 
-    with job_pipeline_lock():
+    with job_write_lock():
         yield get_db()
 
 

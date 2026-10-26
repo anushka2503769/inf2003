@@ -814,6 +814,25 @@ def _fake_stores(db):
     return stores
 
 
+def test_ingest_cli_holds_the_exclusive_write_lock(monkeypatch) -> None:
+    # The CLI writes jobs, so it must exclude readers exactly like the admin import route.
+    script = _load_ingest_script()
+    taken: list[str] = []
+
+    @contextmanager
+    def fake(kind):
+        taken.append(kind)
+        yield
+
+    monkeypatch.setattr("app.sql_access.job_write_lock", lambda: fake("write"))
+    monkeypatch.setattr("app.sql_access.job_read_lock", lambda: fake("read"))
+    monkeypatch.setattr("app.sql_access.job_pipeline_lock", lambda: fake("read"))
+    monkeypatch.setattr("app.db.get_db", lambda: object())
+    with script.open_stores():
+        pass
+    assert taken == ["write"]
+
+
 def test_ingest_cli_argument_parsing() -> None:
     script = _load_ingest_script()
     default = script.parse_args([])

@@ -115,8 +115,16 @@ duplicate references and replacement of the current resume using synthetic data.
 As reported in the 30 September progress report, `001` and the `002` skill seed (139
 skills) are applied to the development Supabase project and constraint checks passed.
 MongoDB collections, validators and indexes are in the repository; live document counts
-are not yet recorded. Migration `003` (views, triggers, indexes; PRD WP-1) is not written
-yet. When a script is applied to a shared project, record the date and commit here.
+are not yet recorded. When a script is applied to a shared project, record the date and
+commit here.
+
+- 2026-10-26: `003_views_triggers_indexes.sql` applied to the development Supabase project
+  from commit `bc46239`; check returned 3 triggers, 3 indexes, no `anon` read and
+  `backend` read on the views.
+- 2026-10-26: first real job import (`backend/scripts/ingest_jobs.py`, LinkedIn Singapore
+  export of 2026-10-25): 504 jobs, all active, 2,041 job-skill links. The MongoDB
+  `job_documents` collection also held about 730 documents from earlier work that this
+  import did not create.
 
 Automated SQL tests run in a disposable Docker PostgreSQL via
 `backend/scripts/run_disposable_db_tests.sh` (applies `001`; WP-1 adds `003`, WP-4 adds
