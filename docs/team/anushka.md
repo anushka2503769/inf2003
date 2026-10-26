@@ -180,3 +180,19 @@ assumed from memory of an earlier session):
 - New test "starts with no role selected and loads a gap only after the student picks one"
   (fails with the old auto-select). Existing tests now pick their role explicitly.
 - Checks: `npm test` 5 files / 60 tests passed; `npm run build` ✓; `git diff --check` clean.
+
+### Redesign B3 Vault progress note (2026-10-26)
+
+- Branch: `feat/redesign-b3-vault` (worktree build, not committed by the builder).
+- Vault restyled to "The Notebook": serif page title, underlined tabs with count pills in pipeline
+  order (Saved, Applied, Interview, Offer, Rejected, Not interested), a four-column table, an
+  always-bordered status select per row, in-row remove confirmation, a tinted row plus a bold
+  "Couldn't move ..." headline when a status change rolls back, skeleton loading, and
+  "Showing X–Y of Z" pager. Mobile (< 768px) shows one card per posting and a labelled "Show"
+  dropdown instead of the tabs; only one of the two is exposed to assistive tech
+  (`features/tracker/useIsMobile.ts`).
+- Behaviour kept: counts, optimistic status change with rollback, remove confirmation and focus
+  return, pages of 20 with step-back, paging locked while a write is pending, "No longer listed".
+- Not built (would be new behaviour): a Retry button on the failed-status error, and the
+  "See your interviews" / "Go to Discover" actions on the empty tab.
+- Preview scenes: `frontend/src/preview/scenes-b3.tsx` (`/__preview/vault-*`).
