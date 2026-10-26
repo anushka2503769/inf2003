@@ -142,3 +142,13 @@ task/PR, integration checks and next milestone notes here without duplicating ev
   an identity check; the wrapper also removes containers by unique name; index cases run in ABA
   order with one ANALYZE up front. Results regenerated; the earlier 50,000-job tracker-index gain
   was an ANALYZE artefact and is retracted in `docs/perf/README.md`.
+
+### WP-10 503 investigation (2026-10-26)
+
+- Cause of the with-lock HTTP 503s: `OperationalError: ... server closed the connection
+  unexpectedly` when the lock opens its extra connection. Not a lock timeout, not
+  `max_connections` (max 21 of 100), nothing in PostgreSQL's log; a raw psycopg2 connection
+  storm with no app code fails the same way. Treated as a Docker/host connection-path artefact
+  (undetermined between Docker Desktop and the sandboxed session). Ephemeral-port exhaustion
+  claim withdrawn (no evidence). Benchmark now records failure bodies, server cause chains,
+  PG sessions, a control storm, and repeats contaminated phases. No `backend/app` change.

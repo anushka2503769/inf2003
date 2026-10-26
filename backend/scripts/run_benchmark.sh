@@ -26,6 +26,10 @@ host_port=""
 mongo_host_port=""
 
 cleanup() {
+    if [[ -n "${BENCH_DOCKER_LOGS:-}" ]]; then
+        printf -- '--- postgres container log (tail) ---\n'
+        docker logs --tail 40 "$container_name" 2>&1 || true
+    fi
     # By unique name as well as by ID: an interrupt between `docker run` creating a
     # container and the shell capturing its ID would otherwise leak it.
     docker rm --force "$container_name" "$mongo_container_name" >/dev/null 2>&1 || true

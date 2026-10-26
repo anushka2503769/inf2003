@@ -100,20 +100,51 @@ These are readings of `results-2026-10-26.md`; re-run before quoting new numbers
   job ids, which only Mongo stores, so the fair end-to-end comparison for the design as built is
   `skill_gap_mongo` 192 ms vs SQL end to end 138 ms for the common role, and 32 vs 35 ms for the
   rare role (roughly equal). Mongo's path also returns `minimum_years`, which SQL cannot.
-- **The shared read lock costs throughput in this setup.** Without it the server sustained
-  about 250 requests/s (median about 38 ms) against about 150 requests/s with it (median 53-60
-  ms). The lock is a second PostgreSQL connection per request, and the app has no connection
-  pool, so connection set-up doubles. There is no concurrent writer, so this measures the lock's
-  overhead, not its benefit (blocking readers while an admin refresh rewrites jobs); say so in
-  the report.
-- **Failed requests in the lock runs.** In the committed run the two "with lock" phases also
-  returned many HTTP 503 responses (see the table; only 200s count toward requests/s and
-  latency, so the with-lock throughput is if anything understated). They occur only in the
-  with-lock phases, which open twice the connections. The most likely cause is the benchmark
-  host's pool of ephemeral TCP ports (closed connections linger in TIME_WAIT for tens of seconds)
-  running out when every request opens fresh connections; this was inferred from timing and not
-  verified. An earlier identical run had no failures (131/184/154 requests/s for lock / no lock /
-  lock again). Either way the direction (the lock run is slower) is the same.
+- **The shared read lock costs throughput, by an amount this laptop cannot pin down.** In the
+  committed run the lock phases sustained 111 and 134 requests/s (median 83 and 72 ms) and the
+  no-lock phase 135 requests/s (median 69 ms), so the lock cost between 0% and 18%, within the
+  phase-to-phase drift. Earlier runs on the same machine measured 250-285 requests/s without the
+  lock against 100-155 with it (a 40-45% cost). Quote a range ("the lock costs roughly 20-45% of
+  Discover throughput locally"), not one number. The mechanism is certain even if the size is
+  not: the lock is a second PostgreSQL connection per request, and the app opens a fresh
+  connection per call (no pool), so the lock path makes twice as many connection set-ups. The
+  benchmark has no concurrent writer, so it measures the lock's overhead, not its benefit
+  (blocking readers while an admin refresh rewrites jobs); say so in the report.
+- **Finding: the HTTP 503 responses seen in some with-lock phases are a connection-path
+  artefact, not an application defect.** Evidence, from the diagnostics the benchmark now
+  records:
+  - The server-side cause chain of every 503 was `ApiError <- SqlAccessError("SQL job
+    synchronization is unavailable") <- psycopg2.OperationalError: connection to server at
+    "127.0.0.1", port N failed: server closed the connection unexpectedly`: the lock's own
+    connection attempt failed. It was not a lock timeout (that is SQLSTATE 55P03 and would be
+    "busy"), not `too many clients` (PostgreSQL never saw more than 21 sessions against
+    `max_connections` 100), and PostgreSQL's own log (inspected with `BENCH_DOCKER_LOGS=1`)
+    recorded no rejected connection.
+  - The failures come in bursts at the start of a phase (the first 1-3 s) and never in the
+    no-lock phases of the same runs, which open one connection per request.
+  - The control experiment (a table in the results file) reproduces them with **no
+    application code at all**: 10 threads opening raw `psycopg2` connections in a loop. In the
+    committed run the nested pattern (hold one connection while opening a second, as the lock
+    does) failed on about 96% and 63% of connection attempts in its two phases; the one-connection
+    pattern failed on about 33% of attempts, all in the last 3.5 s of the phase. A separate
+    5-worker control failed in the same way, so it is not specific to 10 workers. The
+    sampler that counts PostgreSQL sessions also failed to connect during these windows.
+  - Conclusion: Docker Desktop's published-port path (or, if you run this inside a sandboxed
+    session, that sandbox) intermittently drops new connections under rapid connection churn.
+    I could not run outside the sandboxed session used for the committed run, so I could not tell
+    those two apart; re-running on an unsandboxed machine would settle it. The host-side TIME_WAIT
+    count was not measurable in that session (`netstat` is blocked), so the earlier suggestion of
+    ephemeral-port exhaustion is **not supported** by evidence and is withdrawn.
+  - What the benchmark does about it: a phase with more than 1% failed requests is discarded and
+    repeated (up to 3 attempts, cooldown between), and the table lists every attempt's failure
+    count. In the committed run the first with-lock attempt failed 2,346 requests and was
+    discarded; the reported phase is clean.
+  - Application-side implication, worth one sentence in the report: because every request
+    opens one to two brand-new PostgreSQL connections, the API is sensitive to connection-setup
+    failures and pays their cost on every call. A small connection pool (for example
+    `psycopg2.pool.ThreadedConnectionPool`) would remove most of the connection churn, and the
+    lock connection could reuse the request's own connection. That change belongs in
+    `backend/app/` and is deliberately not made here.
 
 ## Limitations
 
@@ -129,5 +160,6 @@ These are readings of `results-2026-10-26.md`; re-run before quoting new numbers
 - The throughput case uses unsigned development tokens (token verification is skipped) and no
   connection pool; production auth adds a little CPU per request.
 - No concurrent writers in the throughput case, and no connection pool in the app, so the
-  throughput numbers are partly a measurement of connection set-up cost and of the host's TCP
-  port supply.
+  throughput numbers are partly a measurement of connection set-up cost and of how reliably
+  the Docker/host connection path accepts new connections (see the Finding above). Throughput
+  swings by up to about 2x between runs on this laptop.
