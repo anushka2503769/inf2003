@@ -13,6 +13,7 @@ from typing import Any
 from uuid import UUID
 
 import httpx
+import psycopg2
 import pytest
 
 from app.auth import AuthenticatedUser, current_user
@@ -288,12 +289,16 @@ def test_limit_50_and_offset_10000_are_allowed(store: FakeStore) -> None:
 
 
 class _LockCursor:
+    """A busy lock raises lock_not_available, as a lock_timeout expiry does."""
+
     def __init__(self, acquired: bool) -> None:
         self.acquired = acquired
         self.statements: list[str] = []
 
     def execute(self, query, params=()):
         self.statements.append(query)
+        if not self.acquired and "advisory" in query:
+            raise psycopg2.errors.LockNotAvailable("canceling statement due to lock timeout")
 
     def fetchone(self):
         return (self.acquired,)
@@ -343,7 +348,7 @@ def test_real_lock_reaches_the_store_without_mongo(
     response = call("/api/discover")
     assert response.status_code == 200
     assert len(store.calls) == 1
-    assert "advisory" in connection.cursor_obj.statements[0]
+    assert any("advisory" in sql for sql in connection.cursor_obj.statements)
     assert connection.closed
 
 
