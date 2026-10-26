@@ -2,6 +2,7 @@ import { useState, type FormEvent } from 'react'
 
 import { useProfile } from '../../auth/useProfile'
 import { useSession } from '../../auth/useSession'
+import { Button } from '../../components/Button'
 import { InlineError } from '../../components/Feedback'
 import { TextField } from '../../components/TextField'
 import { toDisplayMessage } from '../../lib/api-client'
@@ -16,7 +17,7 @@ import type { OnboardingStepProps } from './types'
  * replace it, and that value becomes users.full_name.
  */
 export function ConfirmNameStep({ onComplete }: OnboardingStepProps) {
-  const { identity } = useSession()
+  const { identity, signOut } = useSession()
   const { createProfile } = useProfile()
 
   const [name, setName] = useState(identity?.suggestedName ?? '')
@@ -47,44 +48,46 @@ export function ConfirmNameStep({ onComplete }: OnboardingStepProps) {
 
   return (
     <>
-      <h1 className="heading-1">
-        {identity?.suggestedName ? `Welcome, ${firstWord(identity.suggestedName)}` : 'Welcome'}
-      </h1>
-      <hr className="rule rule--heavy" />
-      <p className="lede">
-        Set the name you want to go by. It appears on your profile and nowhere else — employers
-        never see this app.
-      </p>
+      <div className="onb__intro">
+        <h1 className="t-title">What should we call you?</h1>
+        <p className="t-body muted only-desktop">
+          Just a name for now. Skills and your resume come next, on your profile.
+        </p>
+      </div>
 
-      <form className="stack" onSubmit={event => void handleSubmit(event)} noValidate>
+      <form className="onb__form" onSubmit={event => void handleSubmit(event)} noValidate>
         <TextField
-          label="Your name"
+          label="Name"
           value={name}
           onChange={value => {
             setName(value)
             if (failure !== null) setFailure(null)
           }}
           error={fieldError}
-          hint={identity?.email ?? undefined}
+          hint="How we greet you. You can change it later on your profile."
           autoComplete="name"
           autoFocus
           disabled={saving}
           maxLength={FULL_NAME_MAX_LENGTH}
-          placeholder="e.g. Ana Lim"
+          placeholder="Your name"
+          size="lg"
         />
 
-        {failure ? <InlineError>{failure}</InlineError> : null}
+        {failure ? (
+          <InlineError>
+            <strong>Your name was not saved.</strong> {failure}
+          </InlineError>
+        ) : null}
 
-        <div className="actions">
-          <button type="submit" className="button button--primary" disabled={saving}>
-            {saving ? 'Saving…' : 'Save and continue'}
-          </button>
+        <div className="onb__actions">
+          <Button type="submit" variant="primary" size="lg" iconRight="arrow-right" busy={saving}>
+            {saving ? 'Saving' : 'Continue'}
+          </Button>
+          <Button variant="ghost" onClick={() => void signOut()} disabled={saving}>
+            Sign out
+          </Button>
         </div>
       </form>
     </>
   )
-}
-
-function firstWord(value: string): string {
-  return value.trim().split(' ')[0]
 }

@@ -2,6 +2,8 @@ import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 
 import { HOME_ROUTE } from '../../app/routes'
+import { Brand } from '../../components/Brand'
+import { Meter } from '../../components/Meter'
 import { ConfirmNameStep } from './ConfirmNameStep'
 import type { OnboardingStep } from './types'
 
@@ -10,9 +12,9 @@ import type { OnboardingStep } from './types'
  *
  * Only the name step exists today. Resume upload and skill confirmation are the
  * other pair's work, and they slot in by adding an entry to STEPS and a
- * component with the same props — no change to this file's logic. The step
- * counter appears only once there is more than one step, because "Step 1 of 1"
- * is noise.
+ * component with the same props — no change to this file's logic. The design
+ * shows the step counter and progress bar even for a single step, so the
+ * student sees how short this is.
  */
 const STEPS: OnboardingStep[] = [
   { id: 'name', Component: ConfirmNameStep },
@@ -36,15 +38,22 @@ export function OnboardingScreen() {
   }
 
   return (
-    <div className="entry">
-      <div className="entry__panel">
-        {STEPS.length > 1 ? (
+    <main className="center-page">
+      <div className="onb">
+        <Brand className="onb__brand" />
+        <div className="onb__step">
           <p className="step-count">
             Step {index + 1} of {STEPS.length}
           </p>
-        ) : null}
+          <Meter
+            value={index + 1}
+            total={STEPS.length}
+            variant="steps"
+            label={`Step ${index + 1} of ${STEPS.length}`}
+          />
+        </div>
         <step.Component key={step.id} onComplete={handleComplete} />
       </div>
-    </div>
+    </main>
   )
 }
