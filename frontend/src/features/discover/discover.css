@@ -1,32 +1,464 @@
-.discover > * + * { margin-top: var(--space-4); }
-.discover__intro { border-bottom: 1px solid var(--ink); padding-bottom: var(--space-3); }
-.discover__intro .eyebrow { color: var(--ink-soft); font-size: var(--step-1); text-transform: uppercase; letter-spacing: .08em; }
-.discover__intro .heading-1 { margin-top: var(--space-1); }
-.discover__intro .lede { margin-top: var(--space-2); }
-.discover-filters { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); align-items: end; gap: var(--space-3); }
-.discover-filters .field__label { display: block; margin-bottom: var(--space-1); font-size: var(--step-1); font-weight: 600; }
-.discover-filters .button { justify-self: start; }
-.discover__cards { display: grid; gap: var(--space-4); }
-.discover-card { background: var(--card); border: 1px solid var(--rule); padding: var(--space-4); }
-.discover-card__header { display: flex; align-items: flex-start; justify-content: space-between; gap: var(--space-3); }
-.discover-card__company { margin-top: var(--space-1); color: var(--ink-soft); }
-.discover-card__location { margin-top: var(--space-2); }
-.discover-card__badges { display: flex; flex-wrap: wrap; gap: var(--space-1); margin-top: var(--space-2); }
-.discover-card__badges li { border: 1px solid var(--rule); padding: .15rem .5rem; font-size: var(--step-1); }
-.discover-card__coverage { margin-top: var(--space-3); }
-.discover-card__coverage-label { display: flex; justify-content: space-between; gap: var(--space-2); font-size: var(--step-1); }
-.discover-card__track { height: .5rem; margin-top: var(--space-1); background: var(--paper); }
-.discover-card__track span { display: block; height: 100%; background: var(--seal); }
-.discover-card__coverage-note { margin-top: var(--space-3); color: var(--ink-soft); font-family: var(--font-prose); }
-.discover-card__skills { display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-3); margin-top: var(--space-3); }
-.discover-card__skills ul { display: flex; flex-wrap: wrap; gap: var(--space-1); margin-top: var(--space-1); }
-.discover-card__skills li { border: 1px solid var(--rule); padding: .2rem .5rem; font-size: var(--step-1); }
-.discover-card__actions { display: flex; justify-content: space-between; align-items: center; gap: var(--space-2); margin-top: var(--space-4); padding-top: var(--space-2); border-top: 1px solid var(--rule); }
-.discover-card__retry { margin-top: var(--space-2); color: var(--stamp); }
-.discover__empty, .discover__error { padding: var(--space-4); border: 1px solid var(--rule); background: var(--card); }
-.discover__empty .actions { margin-top: var(--space-2); }
-@media (max-width: 38rem) {
-  .discover-filters, .discover-card__skills { grid-template-columns: 1fr; }
-  .discover-card { padding: var(--space-3); }
-  .discover-card__header, .discover-card__actions { align-items: flex-start; flex-direction: column; }
+/*
+ * Discover (redesign B2, "The Notebook"). One job card at a time, a segmented
+ * coverage meter, key hints on the decision buttons, and a filter sheet on mobile.
+ * Every value reads from styles/tokens.css; shared pieces (.card, .btn, .field,
+ * .meter, .badge, .req, .inline-error, .notice, .empty, .skel) come from B1.
+ */
+
+.discover {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+}
+
+/* ------------------------------------------------------------------ page head */
+.discover__head {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.discover__head-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-4);
+}
+
+.discover__head-row .t-meta {
+  white-space: nowrap;
+}
+
+/* Mobile-only toolbar (Filters button + count). */
+.discover__bar {
+  display: none;
+}
+
+.discover__status {
+  color: var(--color-ink-3);
+}
+
+/* ------------------------------------------------------------------ filters */
+.discover-filters {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+}
+
+.discover-filters__head,
+.discover-filters .discover-filters__clear,
+.discover-scrim {
+  display: none;
+}
+
+.discover-filters__form {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr)) auto;
+  grid-template-areas: 'q q q go';
+  gap: var(--space-3) var(--space-2);
+  align-items: end;
+}
+
+.discover-filters__q {
+  grid-area: q;
+}
+
+.discover-filters__actions {
+  grid-area: go;
+  display: flex;
+  gap: var(--space-2);
+}
+
+.discover-filters__form > .field:not(.discover-filters__q) {
+  grid-row: 2;
+}
+
+.discover-filters__form .field__label {
+  font-size: var(--text-xs);
+  line-height: var(--leading-xs);
+  font-weight: var(--weight-medium);
+  color: var(--color-ink-3);
+}
+
+.discover-filters__dirty {
+  margin-top: calc(-1 * var(--space-2));
+  font-size: var(--text-xs);
+  line-height: var(--leading-xs);
+  color: var(--color-ink-3);
+}
+
+/* ------------------------------------------------------------------ job card */
+.dcard {
+  display: flex;
+  flex-direction: column;
+}
+
+.dcard__head {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding: var(--space-6) var(--space-6) var(--space-5);
+}
+
+.dcard__meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.dot-sep {
+  color: var(--color-ink-3);
+}
+
+.dcard__company {
+  font-size: var(--text-lg);
+  line-height: var(--leading-lg);
+  color: var(--color-ink-2);
+}
+
+.dcard__tags {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2) var(--space-4);
+}
+
+.dcard__badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.dcard__tags .link {
+  margin-left: auto;
+}
+
+.dcard__match {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  padding: var(--space-5) var(--space-6) var(--space-6);
+  border-top: 1px solid var(--color-border);
+}
+
+.dcard__match-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.dcard__match-title {
+  font-size: var(--text-md);
+  line-height: var(--leading-md);
+  font-weight: var(--weight-semibold);
+}
+
+.dcard__skills {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-6);
+}
+
+.dcard__skill-col {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+/* Skill rows: a plain check for "You have", a plain dash for "Missing".
+   Deliberately not checkbox-shaped: nothing here is clickable. */
+.dskills {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.dskills__item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  min-height: calc(var(--space-6) - var(--space-1));
+}
+
+.dskills__name {
+  flex: 1;
+  min-width: 0;
+}
+
+.dskills__item--missing .dskills__name {
+  color: var(--color-ink-2);
+}
+
+.dskills__mark {
+  flex: none;
+  width: calc(var(--space-4) + var(--space-hair));
+  height: calc(var(--space-4) + var(--space-hair));
+}
+
+.dskills__mark--have {
+  color: var(--color-accent);
+}
+
+.dskills__mark--missing {
+  position: relative;
+  display: inline-block;
+}
+
+.dskills__mark--missing::before {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: var(--space-1);
+  right: var(--space-1);
+  border-top: var(--border-width-strong) solid var(--color-border-strong);
+}
+
+.dcard__error {
+  padding: 0 var(--space-6) var(--space-4);
+}
+
+/* Short copy on mobile so the Retry button keeps its row. */
+.dcard__error-short {
+  display: none;
+}
+
+.dcard__decide {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-4) var(--space-6);
+  border-top: 1px solid var(--color-border);
+  background: var(--color-sidebar);
+  border-radius: 0 0 var(--radius-lg) var(--radius-lg);
+}
+
+.dcard__hint {
+  margin-left: auto;
+}
+
+/* Desktop shows the arrow key hint instead of the X glyph. */
+.dcard__pass > .icon {
+  display: none;
+}
+
+.dcard__decide .toast-line {
+  color: var(--color-ink-3);
+}
+
+/* ------------------------------------------------------------------ loading skeleton */
+.dskel--meta { width: 35%; height: var(--space-3); }
+.dskel--title { width: 72%; height: var(--space-6); }
+.dskel--line { width: 46%; height: var(--space-3); }
+.dskel--head { width: 44%; height: calc(var(--space-3) + var(--space-hair)); }
+.dskel--badge { width: calc(var(--space-9) - var(--space-3)); height: calc(var(--space-5) - var(--space-1)); }
+.dskel--badge-short { width: calc(var(--space-8) + var(--space-1) + var(--space-hair)); }
+.dskel--cell { flex: 1; height: var(--space-2); }
+
+/* ------------------------------------------------------------------ empty and redirect */
+.discover-empty {
+  padding: 0 var(--space-6);
+}
+
+.discover-redirect {
+  align-items: flex-start;
+  justify-content: center;
+  gap: var(--space-5);
+  max-width: calc(var(--space-9) * 4 + var(--space-6));
+  min-height: 60vh;
+  margin: 0 auto;
+}
+
+.discover-redirect__body {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-5);
+}
+
+/* ------------------------------------------------------------------ mobile */
+@keyframes discover-sheet-in {
+  from {
+    transform: translateY(var(--space-6));
+    opacity: 0;
+  }
+}
+
+@media (max-width: 767.98px) {
+  .discover {
+    gap: var(--space-4);
+  }
+
+  /* The top bar names the page on mobile; keep the h1 for assistive tech. */
+  .discover__head {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
+  }
+
+  .discover__bar {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+  }
+
+  /* Filters live in a bottom sheet, opened from the Filters button. */
+  .discover-filters {
+    display: none;
+  }
+
+  .discover-scrim {
+    display: block;
+    position: fixed;
+    inset: 0;
+    z-index: var(--z-popover);
+    background: var(--color-scrim);
+  }
+
+  .discover-filters.is-open {
+    display: flex;
+    gap: var(--space-4);
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: var(--z-popover);
+    max-height: calc(100dvh - var(--space-7));
+    overflow-y: auto;
+    padding: var(--space-2) var(--space-4) calc(var(--space-6) + env(safe-area-inset-bottom, 0px));
+    background: var(--color-canvas);
+    border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+    box-shadow: var(--shadow-pop);
+    animation: discover-sheet-in var(--duration-base) var(--ease-out);
+  }
+
+  .discover-filters__head {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    align-items: center;
+  }
+
+  .discover-filters__grab {
+    grid-column: 1 / -1;
+    justify-self: center;
+    width: calc(var(--space-6) + var(--space-1));
+    height: var(--space-1);
+    margin-bottom: var(--space-2);
+    border-radius: var(--radius-full);
+    background: var(--color-border-strong);
+  }
+
+  .discover-filters__head .btn--icon {
+    margin-right: calc(-1 * var(--space-3));
+  }
+
+  .discover-filters__form {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-areas: none;
+    gap: var(--space-4);
+  }
+
+  .discover-filters__q,
+  .discover-filters__actions,
+  .discover-filters__form > .field:not(.discover-filters__q) {
+    grid-area: auto;
+    grid-row: auto;
+  }
+
+  .discover-filters__form .field__label {
+    font-size: var(--text-sm);
+    line-height: var(--leading-sm);
+    color: var(--color-ink);
+  }
+
+  .discover-filters .discover-filters__clear {
+    display: inline-flex;
+  }
+
+  .discover-filters__actions .btn[type='submit'] {
+    flex: 1;
+  }
+
+  .discover-filters__dirty {
+    margin-top: 0;
+  }
+
+  .dcard__head {
+    padding: var(--space-5) var(--space-4) var(--space-4);
+  }
+
+  .dcard .dcard__title {
+    font-size: var(--text-2xl);
+    line-height: var(--leading-2xl);
+    letter-spacing: -0.01em;
+  }
+
+  .dcard__match {
+    padding: var(--space-4);
+  }
+
+  /* 44px hit area for the posting link without moving the row. */
+  .dcard__tags .link {
+    padding-block: var(--space-3);
+    margin-block: calc(-1 * var(--space-3));
+  }
+
+  .dcard__match-head {
+    flex-direction: column;
+    gap: var(--space-hair);
+  }
+
+  .dcard__skills {
+    grid-template-columns: minmax(0, 1fr);
+    gap: var(--space-5);
+  }
+
+  .dcard__error {
+    padding: 0 var(--space-4) var(--space-4);
+  }
+
+  .dcard__error-long {
+    display: none;
+  }
+
+  .dcard__error-short {
+    display: inline;
+  }
+
+  .dcard__decide {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    padding: var(--space-3);
+  }
+
+  .dcard__decide .toast-line {
+    grid-column: 1 / -1;
+  }
+
+  .dcard__hint,
+  .dcard__decide .kbd {
+    display: none;
+  }
+
+  .dcard__pass > .icon {
+    display: inline-block;
+  }
+
+  .dcard__decide .btn {
+    font-size: var(--text-lg);
+  }
+
+  .card.discover-empty {
+    padding: 0;
+    border: 0;
+    background: transparent;
+  }
+
+  .discover-redirect {
+    min-height: 0;
+  }
 }

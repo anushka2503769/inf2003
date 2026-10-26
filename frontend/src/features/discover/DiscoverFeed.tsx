@@ -1,10 +1,16 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from 'react'
-import { useSearchParams } from 'react-router-dom'
+import { useCallback, useEffect, useId, useMemo, useRef, useState, type FormEvent, type ReactNode } from 'react'
+import { Link, useSearchParams } from 'react-router-dom'
 
+import { routes } from '../../app/routes'
+import { Badge, RequirementLabel } from '../../components/Badge'
+import { Button, buttonClass } from '../../components/Button'
+import { EmptyState, Notice, Spinner } from '../../components/Feedback'
+import { Icon } from '../../components/Icon'
+import { Meter } from '../../components/Meter'
 import { JOB_TYPES, WORK_ARRANGEMENTS, type JobType, type WorkArrangement } from '../../types/api'
 import type { DiscoverClientError } from './realClient'
 import { discoverClient, type DiscoverClient } from './client'
-import type { DiscoverDecision, DiscoverFilters, DiscoverItem } from './types'
+import type { DiscoverDecision, DiscoverFilters, DiscoverItem, SkillRequirement } from './types'
 import './discover.css'
 
 const PAGE_SIZE = 20
@@ -46,6 +52,70 @@ function isHttpUrl(value: string): boolean {
   return /^https?:\/\//i.test(value)
 }
 
+// Below this width the shell switches to the mobile layout and filters move into a sheet.
+const MOBILE_QUERY = '(max-width: 767.98px)'
+
+function isMobileViewport(): boolean {
+  return typeof window.matchMedia === 'function' && window.matchMedia(MOBILE_QUERY).matches
+}
+
+const JOB_TYPE_LABEL: Record<JobType, string> = { FULL_TIME: 'Full time', PART_TIME: 'Part time', INTERNSHIP: 'Internship' }
+const ARRANGEMENT_LABEL: Record<WorkArrangement, string> = { ONSITE: 'On-site', HYBRID: 'Hybrid', REMOTE: 'Remote' }
+
+const POSTED_FORMAT = new Intl.DateTimeFormat('en-GB', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' })
+
+function bySkillPriority(a: SkillRequirement, b: SkillRequirement): number {
+  return Number(a.requirement_type !== 'REQUIRED') - Number(b.requirement_type !== 'REQUIRED') || a.name.localeCompare(b.name)
+}
+
+function filterKey(filters: DiscoverFilters): string {
+  return JSON.stringify([filters.job_type ?? '', filters.work_arrangement ?? '', filters.location?.trim() ?? '', filters.q?.trim() ?? ''])
+}
+
+function filterSummary(filters: DiscoverFilters): string {
+  return [
+    filters.job_type && JOB_TYPE_LABEL[filters.job_type],
+    filters.work_arrangement && ARRANGEMENT_LABEL[filters.work_arrangement],
+    filters.location,
+    filters.q && `“${filters.q}”`,
+  ].filter(Boolean).join(' · ')
+}
+
+/** "You have" gets a plain check, "Missing" a plain dash: markers, not checkboxes. */
+function SkillList({ skills, have, label }: { skills: SkillRequirement[]; have: boolean; label: string }) {
+  if (skills.length === 0) return <p className="t-meta">{have ? 'No matched skills' : 'No missing skills'}</p>
+  return (
+    <ul className="dskills" aria-label={label}>
+      {[...skills].sort(bySkillPriority).map(skill => (
+        <li key={skill.skill_id} className={have ? 'dskills__item' : 'dskills__item dskills__item--missing'}>
+          {have
+            ? <Icon name="check" className="dskills__mark dskills__mark--have" />
+            : <span className="dskills__mark dskills__mark--missing" aria-hidden="true" />}
+          <span className="dskills__name">{skill.name}</span>
+          <RequirementLabel required={skill.requirement_type === 'REQUIRED'} />
+        </li>
+      ))}
+    </ul>
+  )
+}
+
+/** Inline failure with one recovery button; the button can carry data-retry for focus. */
+function FailureLine({ children, actionLabel, onAction, disabled, retry }: {
+  children: ReactNode
+  actionLabel: string
+  onAction: () => void
+  disabled?: boolean
+  retry?: boolean
+}) {
+  return (
+    <div className="inline-error" role="alert">
+      <Icon name="warning-circle" />
+      <span className="inline-error__text">{children}</span>
+      <Button variant="secondary" icon="arrow-clockwise" disabled={disabled} onClick={onAction} data-retry={retry || undefined}>{actionLabel}</Button>
+    </div>
+  )
+}
+
 function JobCard({ entry, onDecision, pending, onRetry, first }: {
   entry: FeedEntry
   first: boolean
@@ -55,56 +125,106 @@ function JobCard({ entry, onDecision, pending, onRetry, first }: {
 }) {
   const { job } = entry.item
   const { match } = entry.item
-  const posted = job.source_posted_at
-    ? new Intl.DateTimeFormat(undefined, { dateStyle: 'medium', timeZone: 'UTC' }).format(new Date(job.source_posted_at))
-    : 'Date not provided'
-  const coveragePercent = match.coverage === null ? undefined : Math.round(match.coverage * 100)
+  const posted = job.source_posted_at ? `Posted ${POSTED_FORMAT.format(new Date(job.source_posted_at))}` : 'Posting date not provided'
+  const postingLink = isHttpUrl(job.application_url)
+    ? <a className="link" href={job.application_url} target="_blank" rel="noopener noreferrer">Open posting<Icon name="arrow-square-out" /></a>
+    : null
   return (
-    <article className="discover-card" aria-label={`${job.title} at ${job.company_name}`}>
-      <header className="discover-card__header">
-        <div>
-          <h2 className="heading-2">{job.title}</h2>
-          <p className="discover-card__company">{job.company_name}</p>
+    <article className="card dcard" aria-label={`${job.title} at ${job.company_name}`}>
+      <header className="dcard__head">
+        <p className="dcard__meta t-meta">
+          <span>Match rank {entry.item.rank}</span>
+          <span className="dot-sep" aria-hidden="true">·</span>
+          <span>{posted}</span>
+        </p>
+        <h2 className="t-title dcard__title">{job.title}</h2>
+        <p className="dcard__company">
+          {job.company_name} <span className="dot-sep" aria-hidden="true">·</span> {job.location ?? 'Location not provided'}
+        </p>
+        <div className="dcard__tags">
+          {(job.job_type || job.work_arrangement) && (
+            <ul className="dcard__badges" aria-label="Job details">
+              {job.job_type && <li><Badge>{JOB_TYPE_LABEL[job.job_type]}</Badge></li>}
+              {job.work_arrangement && <li><Badge>{ARRANGEMENT_LABEL[job.work_arrangement]}</Badge></li>}
+            </ul>
+          )}
+          {postingLink}
         </div>
-        <p className="note">Posted {posted}</p>
       </header>
-      <p className="discover-card__location">{job.location ?? 'Location not provided'}</p>
-      <ul className="discover-card__badges" aria-label="Job details">
-        {job.job_type && <li>{job.job_type.replace('_', ' ')}</li>}
-        {job.work_arrangement && <li>{job.work_arrangement}</li>}
-      </ul>
-      {match.coverage === null ? (
-        <p className="discover-card__coverage-note">No skill requirements were extracted for this job.</p>
-      ) : (
-        <div className="discover-card__coverage">
-          <div className="discover-card__coverage-label">
-            <span>You have {match.required_matched} of {match.required_total} required skills</span>
-            <span>{coveragePercent}%</span>
-          </div>
-          <div className="discover-card__track" role="progressbar" aria-label="Required skill coverage" aria-valuemin={0} aria-valuemax={100} aria-valuenow={coveragePercent}>
-            <span style={{ width: `${coveragePercent}%` }} />
-          </div>
+      <section className="dcard__match" aria-label="Skill match">
+        {match.coverage === null ? (
+          <>
+            <h3 className="dcard__match-title">Skill match</h3>
+            <Notice tone="info">
+              <strong>No skill requirements were extracted for this job.</strong>{' '}
+              <span className="muted">We could not read a skills list from this posting{postingLink ? ', so open the posting to judge for yourself.' : '.'}</span>
+            </Notice>
+          </>
+        ) : (
+          <>
+            <div className="dcard__match-head">
+              <h3 className="dcard__match-title">You have {match.required_matched} of {match.required_total} required skills</h3>
+              {match.preferred_total > 0 && <span className="t-meta mono">{match.preferred_matched} of {match.preferred_total} preferred</span>}
+            </div>
+            {match.required_total > 0 && (
+              <Meter value={match.required_matched} total={match.required_total} label={`Required skill coverage: ${match.required_matched} of ${match.required_total}`} />
+            )}
+            <div className="dcard__skills">
+              <div className="dcard__skill-col">
+                <h4 className="t-label">You have</h4>
+                <SkillList skills={match.matched_skills} have label="Matched skills" />
+              </div>
+              <div className="dcard__skill-col">
+                <h4 className="t-label">Missing</h4>
+                <SkillList skills={match.missing_skills} have={false} label="Missing skills" />
+              </div>
+            </div>
+          </>
+        )}
+      </section>
+      {entry.failedDecision && (
+        <div className="dcard__error">
+          <FailureLine actionLabel="Retry" onAction={() => onRetry(entry)} retry>
+            <span className="dcard__error-long">
+              <strong>{entry.failedDecision === 'SAVED' ? `Couldn’t save “${job.title}”.` : `Couldn’t mark “${job.title}” as not interested.`}</strong>{' '}
+              Your decision was not recorded, and the card stays here.
+            </span>
+            <span className="dcard__error-short">
+              <strong>{entry.failedDecision === 'SAVED' ? 'Couldn’t save.' : 'Couldn’t record that.'}</strong> Not recorded yet.
+            </span>
+          </FailureLine>
         </div>
       )}
-      <div className="discover-card__skills">
-        <div>
-          <h3 className="heading-3">Matched skills</h3>
-          {match.matched_skills.length ? <ul aria-label="Matched skills">{[...match.matched_skills].sort((a, b) => Number(a.requirement_type !== 'REQUIRED') - Number(b.requirement_type !== 'REQUIRED') || a.name.localeCompare(b.name)).map(skill => <li key={skill.skill_id}>{skill.name}</li>)}</ul> : <p className="note">No matched skills</p>}
-        </div>
-        <div>
-          <h3 className="heading-3">Missing skills</h3>
-          {match.missing_skills.length ? <ul aria-label="Missing skills">{[...match.missing_skills].sort((a, b) => Number(a.requirement_type !== 'REQUIRED') - Number(b.requirement_type !== 'REQUIRED') || a.name.localeCompare(b.name)).map(skill => <li key={skill.skill_id}>{skill.name}{skill.requirement_type === 'REQUIRED' ? ' · Required' : ' · Preferred'}</li>)}</ul> : <p className="note">No missing skills</p>}
-        </div>
+      <div className="dcard__decide">
+        <Button className="dcard__pass" variant="secondary" kbdLeft="←" icon="x" disabled={pending} onClick={() => onDecision(job.job_id, 'NOT_INTERESTED')} aria-label={`Not interested in ${job.title}`} aria-keyshortcuts={first ? 'ArrowLeft' : undefined}>Not interested</Button>
+        <span className="dcard__hint t-meta">Decide with the arrow keys</span>
+        <Button className="dcard__save" variant="primary" icon="bookmark-simple" kbd="→" data-primary disabled={pending} onClick={() => onDecision(job.job_id, 'SAVED')} aria-label={`Save ${job.title}`} aria-keyshortcuts={first ? 'ArrowRight' : undefined}>Save</Button>
       </div>
-      <div className="discover-card__actions">
-        <button className="button button--quiet" type="button" disabled={pending} onClick={() => onDecision(job.job_id, 'NOT_INTERESTED')} aria-label={`Not interested in ${job.title}`} aria-keyshortcuts={first ? 'ArrowLeft' : undefined}>← Not interested</button>
-        <div className="actions">
-          {isHttpUrl(job.application_url) && <a className="button button--quiet" href={job.application_url} target="_blank" rel="noopener noreferrer">Open posting</a>}
-          <button className="button button--primary" type="button" data-primary disabled={pending} onClick={() => onDecision(job.job_id, 'SAVED')} aria-label={`Save ${job.title}`} aria-keyshortcuts={first ? 'ArrowRight' : undefined}>Save →</button>
-        </div>
-      </div>
-      {entry.failedDecision && <p className="discover-card__retry" role="alert"><button type="button" data-retry className="button button--quiet" onClick={() => onRetry(entry)}>Not saved — retry</button></p>}
     </article>
+  )
+}
+
+/** Shape of a job card while the first page loads. */
+function SkeletonCard() {
+  return (
+    <div className="card dcard">
+      <div className="dcard__head" aria-hidden="true">
+        <span className="skel dskel dskel--meta" />
+        <span className="skel dskel dskel--title" />
+        <span className="skel dskel dskel--line" />
+        <span className="dcard__tags"><span className="skel dskel dskel--badge" /><span className="skel dskel dskel--badge dskel--badge-short" /></span>
+      </div>
+      <div className="dcard__match" aria-hidden="true">
+        <span className="skel dskel dskel--head" />
+        <span className="meter">{Array.from({ length: 5 }, (_, index) => <span key={index} className="skel dskel dskel--cell" />)}</span>
+        <span className="skel dskel dskel--line" style={{ width: '60%' }} />
+        <span className="skel dskel dskel--line" style={{ width: '52%' }} />
+        <span className="skel dskel dskel--line" style={{ width: '57%' }} />
+      </div>
+      <div className="dcard__decide">
+        <p className="toast-line t-meta" role="status"><Spinner size="sm" />Ranking postings against your skills</p>
+      </div>
+    </div>
   )
 }
 
@@ -124,6 +244,11 @@ export function DiscoverFeed({ client = discoverClient, onProfileMissing }: {
   const [hasMore, setHasMore] = useState(false)
   const [pendingIds, setPendingIds] = useState<Set<string>>(() => new Set())
   const [notice, setNotice] = useState<string | null>(null)
+  const [profileMissing, setProfileMissing] = useState(false)
+  const [sheetOpen, setSheetOpen] = useState(false)
+  const sheetId = useId()
+  const sheetRef = useRef<HTMLDivElement>(null)
+  const filtersButtonRef = useRef<HTMLButtonElement>(null)
   const cardsRef = useRef<HTMLDivElement>(null)
   const refocus = useRef(false)
   const requestId = useRef(0)
@@ -163,6 +288,7 @@ export function DiscoverFeed({ client = discoverClient, onProfileMissing }: {
     setLoadError(null)
     setNextError(null)
     setNotice(null)
+    setProfileMissing(false)
     setLoadingNext(false)
     loadingPage.current = false
     setPendingIds(new Set())
@@ -178,7 +304,10 @@ export function DiscoverFeed({ client = discoverClient, onProfileMissing }: {
     } catch (error) {
       if (id !== requestId.current) return
       setLoadError(messageFor(error))
-      if (isProfileMissing(error)) await notifyProfileMissing()
+      if (isProfileMissing(error)) {
+        setProfileMissing(true)
+        await notifyProfileMissing()
+      }
     } finally {
       if (id === requestId.current) setLoading(false)
     }
@@ -265,74 +394,198 @@ export function DiscoverFeed({ client = discoverClient, onProfileMissing }: {
   // Filters and reloads are blocked while decisions are in flight so a failed PUT can never be dropped silently.
   const busyDeciding = pendingIds.size > 0
 
+  const closeSheet = useCallback(() => {
+    setSheetOpen(false)
+    filtersButtonRef.current?.focus()
+  }, [])
+
   const submitFilters = (event: FormEvent) => {
     event.preventDefault()
     if (busyDeciding) return
     const params = new URLSearchParams()
     Object.entries(draft).forEach(([key, value]) => { if (value?.trim()) params.set(key, value.trim()) })
     setSearchParams(params)
+    if (sheetOpen) closeSheet()
   }
 
   const onKeyDown = useCallback((event: globalThis.KeyboardEvent) => {
     const target = event.target as HTMLElement
     if (event.altKey || event.ctrlKey || event.metaKey || event.shiftKey || event.repeat || target.isContentEditable || target.closest('input, textarea, select')) return
+    // The arrow keys belong to the filter sheet while it is open.
+    if (sheetOpen) return
     if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return
     const first = entriesRef.current[0]
     if (!first) return
     event.preventDefault()
     void decide(first.item.job.job_id, event.key === 'ArrowLeft' ? 'NOT_INTERESTED' : 'SAVED')
-  }, [decide])
+  }, [decide, sheetOpen])
 
   useEffect(() => {
     document.addEventListener('keydown', onKeyDown)
     return () => document.removeEventListener('keydown', onKeyDown)
   }, [onKeyDown])
 
+  // Mobile filter sheet: focus moves in, Tab stays in, Escape closes; widening to desktop closes it.
+  useEffect(() => {
+    if (!sheetOpen) return
+    document.getElementById('discover-keyword')?.focus()
+    const onSheetKey = (event: globalThis.KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        event.preventDefault()
+        closeSheet()
+        return
+      }
+      if (event.key !== 'Tab' || !sheetRef.current) return
+      const focusable = [...sheetRef.current.querySelectorAll<HTMLElement>('button:not(:disabled), input, select, a[href]')]
+        .filter(element => element.offsetParent !== null)
+      if (focusable.length === 0) return
+      const firstControl = focusable[0]
+      const lastControl = focusable[focusable.length - 1]
+      if (event.shiftKey && document.activeElement === firstControl) {
+        event.preventDefault()
+        lastControl.focus()
+      } else if (!event.shiftKey && document.activeElement === lastControl) {
+        event.preventDefault()
+        firstControl.focus()
+      }
+    }
+    document.addEventListener('keydown', onSheetKey)
+    const query = typeof window.matchMedia === 'function' ? window.matchMedia(MOBILE_QUERY) : null
+    const onWiden = () => { if (query && !query.matches) setSheetOpen(false) }
+    query?.addEventListener('change', onWiden)
+    // The page behind the sheet must not scroll while it is open.
+    const previousOverflow = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    return () => {
+      document.removeEventListener('keydown', onSheetKey)
+      query?.removeEventListener('change', onWiden)
+      document.body.style.overflow = previousOverflow
+    }
+  }, [sheetOpen, closeSheet])
+
   const changeFilters = () => {
     // Opening the filter controls must not change the submitted URL or fetch new results.
-    document.getElementById('discover-job-type')?.focus()
+    if (isMobileViewport()) setSheetOpen(true)
+    else document.getElementById('discover-job-type')?.focus()
   }
 
   const checkAgain = () => { if (!busyDeciding) void loadFirst() }
 
+  if (profileMissing && !loading) {
+    return (
+      <div className="discover discover-redirect" role="region" aria-label="Discover jobs">
+        <div className="discover-redirect__body" role="status">
+          <Spinner />
+          <h1 className="t-title-sm">Let’s set up your profile first.</h1>
+          <p className="t-body muted">Discover needs your name before it can rank anything. Taking you to the first step.</p>
+        </div>
+        <Link className={buttonClass({ variant: 'secondary' })} to={routes.welcome}>Go now<Icon name="arrow-right" /></Link>
+      </div>
+    )
+  }
+
+  const filtered = filterKey(committed) !== filterKey({})
+  const dirty = filterKey(draft) !== filterKey(committed)
+  const summary = filterSummary(committed)
+  const plus = hasMore ? '+' : ''
+  const meta = loading
+    ? { long: 'Loading', short: 'Loading' }
+    : loadError
+      ? null
+      : entries.length === 0
+        ? { long: filtered ? '0 left for these filters' : '0 left', short: '0 left' }
+        : {
+            long: `${entries.length}${plus} ${entries.length === 1 && !hasMore ? 'posting' : 'postings'} ranked for you`,
+            short: `${entries.length}${plus} ranked`,
+          }
+  const current = entries[0]
+
   return (
     <div className="discover" role="region" aria-label="Discover jobs">
-      <header className="discover__intro">
-        <p className="eyebrow">Job listings</p>
-        <h1 className="heading-1">Discover</h1>
-        <p className="lede">Explore postings by skill coverage, based on the skills you have confirmed.</p>
+      <header className="discover__head">
+        <div className="discover__head-row">
+          <h1 className="t-title">Discover</h1>
+          {meta && <span className="t-meta mono">{meta.long}</span>}
+        </div>
+        <p className="t-body muted">Postings ranked by how many of their required skills you already have.</p>
       </header>
-      <form className="discover-filters" onSubmit={submitFilters}>
-        <label className="field"><span className="field__label">Job type</span>
-          <select id="discover-job-type" className="field__input" aria-label="Job type" value={draft.job_type ?? ''} onChange={event => setDraft(value => ({ ...value, job_type: (event.target.value || undefined) as JobType | undefined }))}>
-            <option value="">Any type</option>{JOB_TYPES.map(value => <option key={value} value={value}>{value.replace('_', ' ')}</option>)}
-          </select>
-        </label>
-        <label className="field"><span className="field__label">Work arrangement</span>
-          <select className="field__input" aria-label="Work arrangement" value={draft.work_arrangement ?? ''} onChange={event => setDraft(value => ({ ...value, work_arrangement: (event.target.value || undefined) as WorkArrangement | undefined }))}>
-            <option value="">Any arrangement</option>{WORK_ARRANGEMENTS.map(value => <option key={value} value={value}>{value}</option>)}
-          </select>
-        </label>
-        <label className="field"><span className="field__label">Location</span>
-          <input className="field__input" aria-label="Location" maxLength={100} value={draft.location ?? ''} onChange={event => setDraft(value => ({ ...value, location: event.target.value || undefined }))} />
-        </label>
-        <label className="field"><span className="field__label">Keyword</span>
-          <input className="field__input" aria-label="Keyword" maxLength={100} value={draft.q ?? ''} onChange={event => setDraft(value => ({ ...value, q: event.target.value || undefined }))} />
-        </label>
-        <button className="button button--primary" type="submit" disabled={busyDeciding}>Apply filters</button>
-      </form>
-      {loading && <p role="status" className="note">Loading jobs…</p>}
-      {!loading && loadError && <div className="discover__error" role="alert"><p>{loadError}</p><button className="button" type="button" disabled={busyDeciding} onClick={checkAgain}>Try again</button></div>}
+      <div className="discover__bar">
+        <button ref={filtersButtonRef} type="button" className={buttonClass({ size: 'lg' })} aria-haspopup="dialog" aria-expanded={sheetOpen} aria-controls={sheetId} onClick={() => setSheetOpen(true)}>
+          <Icon name="sliders-horizontal" />Filters
+        </button>
+        {meta && <span className="t-meta mono">{meta.short}</span>}
+      </div>
+      {sheetOpen && <div className="discover-scrim" aria-hidden="true" onClick={closeSheet} />}
+      <div
+        id={sheetId}
+        ref={sheetRef}
+        className={sheetOpen ? 'discover-filters is-open' : 'discover-filters'}
+        role={sheetOpen ? 'dialog' : undefined}
+        aria-modal={sheetOpen || undefined}
+        aria-labelledby={sheetOpen ? `${sheetId}-title` : undefined}
+      >
+        <div className="discover-filters__head">
+          <span className="discover-filters__grab" aria-hidden="true" />
+          <h2 id={`${sheetId}-title`} className="t-heading">Filters</h2>
+          <Button variant="ghost" size="lg" iconOnly icon="x" aria-label="Close filters" onClick={closeSheet} />
+        </div>
+        <form className="discover-filters__form" role="search" aria-label="Filter jobs" onSubmit={submitFilters}>
+          <div className="field discover-filters__q">
+            <label className="field__label" htmlFor="discover-keyword">Keyword</label>
+            <div className="field__control">
+              <Icon name="magnifying-glass" />
+              <input id="discover-keyword" className="field__input" maxLength={100} enterKeyHint="search" placeholder="Search job titles or companies" value={draft.q ?? ''} onChange={event => setDraft(value => ({ ...value, q: event.target.value || undefined }))} />
+            </div>
+          </div>
+          <div className="field">
+            <label className="field__label" htmlFor="discover-job-type">Job type</label>
+            <select id="discover-job-type" className="field__input" value={draft.job_type ?? ''} onChange={event => setDraft(value => ({ ...value, job_type: (event.target.value || undefined) as JobType | undefined }))}>
+              <option value="">Any type</option>{JOB_TYPES.map(value => <option key={value} value={value}>{JOB_TYPE_LABEL[value]}</option>)}
+            </select>
+          </div>
+          <div className="field">
+            <label className="field__label" htmlFor="discover-arrangement">Work arrangement</label>
+            <select id="discover-arrangement" className="field__input" value={draft.work_arrangement ?? ''} onChange={event => setDraft(value => ({ ...value, work_arrangement: (event.target.value || undefined) as WorkArrangement | undefined }))}>
+              <option value="">Any arrangement</option>{WORK_ARRANGEMENTS.map(value => <option key={value} value={value}>{ARRANGEMENT_LABEL[value]}</option>)}
+            </select>
+          </div>
+          <div className="field">
+            <label className="field__label" htmlFor="discover-location">Location</label>
+            <input id="discover-location" className="field__input" maxLength={100} placeholder="e.g. Jurong" value={draft.location ?? ''} onChange={event => setDraft(value => ({ ...value, location: event.target.value || undefined }))} />
+          </div>
+          <div className="discover-filters__actions">
+            <Button className="discover-filters__clear" size="lg" onClick={() => setDraft({})}>Clear</Button>
+            <Button type="submit" variant={dirty ? 'primary' : 'secondary'} disabled={busyDeciding}>Apply filters</Button>
+          </div>
+        </form>
+        {dirty && <p className="discover-filters__dirty">Changes apply when you press Apply filters or Enter.</p>}
+      </div>
+      {loading && <SkeletonCard />}
+      {!loading && loadError && <FailureLine actionLabel="Try again" disabled={busyDeciding} onAction={checkAgain}>{loadError}</FailureLine>}
       {!loading && !loadError && entries.length === 0 && !hasMore && !loadingNext && !busyDeciding && (
-        <section className="discover__empty" aria-live="polite"><h2 className="heading-2">No more jobs for these filters</h2><div className="actions"><button className="button button--quiet" type="button" onClick={changeFilters}>Change filters</button><button className="button button--primary" type="button" onClick={checkAgain}>Check again</button></div></section>
+        <section className="card discover-empty" aria-live="polite">
+          <EmptyState
+            icon="check"
+            title="You’ve seen everything that matches."
+            actions={<>
+              <Button variant="primary" icon="sliders-horizontal" onClick={changeFilters}>Change filters</Button>
+              <Button icon="arrow-clockwise" onClick={checkAgain}>Check again</Button>
+            </>}
+          >
+            {summary
+              ? <>There is nothing left for <strong>{summary}</strong> that you have not decided on. Loosen a filter, or check again after the next job refresh.</>
+              : 'There is nothing left that you have not decided on. Check again after the next job refresh.'}
+          </EmptyState>
+        </section>
       )}
-      {!loading && !loadError && entries.length === 0 && busyDeciding && <p role="status" className="note">Saving your decision…</p>}
-      {notice && <p role="status" className="note">{notice}</p>}
-      {!loadError && entries.length > 0 && <div className="discover__cards" ref={cardsRef}>{entries.map((entry, position) => (
-        <JobCard first={position === 0} key={entry.item.job.job_id} entry={entry} pending={pendingIds.has(entry.item.job.job_id)} onDecision={(id, status) => void decide(id, status)} onRetry={retry => void decide(retry.item.job.job_id, retry.failedDecision ?? 'SAVED')} />
-      ))}</div>}
-      {loadingNext && <p className="note" role="status">Loading more jobs…</p>}
-      {nextError && <div className="discover__error" role="alert"><p>{nextError}</p><button className="button" type="button" onClick={() => void loadNext()}>Try loading more</button></div>}
+      {!loading && !loadError && entries.length === 0 && busyDeciding && <p role="status" className="discover__status toast-line t-meta"><Spinner size="sm" />Saving your decision…</p>}
+      {notice && <div role="status"><Notice tone="info">{notice}</Notice></div>}
+      {!loadError && current && <div className="discover__cards" ref={cardsRef}>
+        {/* One posting at a time; the rest of the loaded queue waits behind it. */}
+        <JobCard first key={current.item.job.job_id} entry={current} pending={pendingIds.has(current.item.job.job_id)} onDecision={(id, status) => void decide(id, status)} onRetry={retry => void decide(retry.item.job.job_id, retry.failedDecision ?? 'SAVED')} />
+      </div>}
+      {loadingNext && entries.length === 0 && <p className="discover__status toast-line t-meta" role="status"><Spinner size="sm" />Loading more jobs…</p>}
+      {nextError && <FailureLine actionLabel="Try loading more" onAction={() => void loadNext()}>{nextError}</FailureLine>}
     </div>
   )
 }

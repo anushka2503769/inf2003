@@ -2,51 +2,55 @@ import { useEffect, useState, type FormEvent } from 'react'
 
 import { useProfile } from '../auth/useProfile'
 import { useSession } from '../auth/useSession'
+import { Button } from '../components/Button'
 import { InlineError } from '../components/Feedback'
+import { Icon } from '../components/Icon'
 import { TextField } from '../components/TextField'
+import '../features/skills/profile-screen.css'
 import { toDisplayMessage } from '../lib/api-client'
 import { FULL_NAME_MAX_LENGTH, normaliseFullName, validateFullName } from '../lib/validation'
 
 export function ProfileScreen() {
   const { identity, signOut } = useSession()
-  const { profile } = useProfile()
 
   return (
-    <div className="stack-lg">
-      <section className="stack">
-        <h1 className="heading-1">Profile</h1>
-        <hr className="rule rule--heavy" />
-        <div className="identity">
-          <Avatar url={identity?.avatarUrl ?? null} name={profile?.full_name ?? ''} />
-          <div>
-            <p className="identity__name">{profile?.full_name}</p>
-            <p className="note">{identity?.email ?? 'Signed in with Google'}</p>
-          </div>
-        </div>
-      </section>
+    <div className="profile">
+      <header className="profile__head">
+        <h1 className="profile__title">Profile</h1>
+        <p className="profile__lede">Your name and account. Your resume and skills will live here too.</p>
+      </header>
 
       <NameEditor />
 
-      <section className="stack">
-        <h2 className="heading-2">Resume and skills</h2>
-        <hr className="rule" />
-        <p className="prose">
-          Once you add a resume, the skills found in it appear here for you to confirm or correct.
-          Those confirmed skills are what Discover matches jobs against.
-        </p>
-        <p className="note">Not built yet.</p>
+      <section className="profile__section" aria-labelledby="profile-resume-heading">
+        <div className="profile__section-head">
+          <h2 className="profile__heading" id="profile-resume-heading">Resume and skills</h2>
+          <p className="profile__desc">
+            Once you add a resume, the skills found in it appear here for you to confirm or correct.
+            Those confirmed skills are what Discover matches jobs against.
+          </p>
+        </div>
+        <div className="profile__placeholder">
+          <Icon name="file-text" size="lg" />
+          <p>
+            <strong>Not built yet.</strong>{' '}
+            <span className="muted">Resume upload and skill confirmation arrive in a later update.</span>
+          </p>
+        </div>
       </section>
 
-      <section className="stack">
-        <h2 className="heading-2">Account</h2>
-        <hr className="rule" />
-        <p className="prose">
-          Signing out clears this session on this device. Your saved jobs stay on your account.
-        </p>
+      <section className="profile__section" aria-labelledby="profile-account-heading">
+        <div className="profile__section-head">
+          <h2 className="profile__heading" id="profile-account-heading">Account</h2>
+          <p className="profile__desc">
+            Signed in with Google{identity?.email ? <> as <strong>{identity.email}</strong></> : null}.
+            Signing out clears this session on this device. Your saved jobs stay on your account.
+          </p>
+        </div>
         <div className="actions">
-          <button type="button" className="button" onClick={() => void signOut()}>
+          <Button icon="sign-out" onClick={() => void signOut()}>
             Sign out
-          </button>
+          </Button>
         </div>
       </section>
     </div>
@@ -105,65 +109,55 @@ function NameEditor() {
   }
 
   return (
-    <section className="stack">
-      <h2 className="heading-2">Your name</h2>
-      <hr className="rule" />
-      <form className="stack" onSubmit={event => void handleSubmit(event)} noValidate>
-        <TextField
-          label="Name"
-          value={name}
-          onChange={value => {
-            setTouched(true)
-            setName(value)
-            if (failure !== null) setFailure(null)
-          }}
-          error={fieldError}
-          hint="Shown on your profile. You can change it whenever you like."
-          autoComplete="name"
-          disabled={saving}
-          maxLength={FULL_NAME_MAX_LENGTH}
-        />
+    <section className="profile__section" aria-labelledby="profile-name-heading">
+      <div className="profile__section-head">
+        <h2 className="profile__heading" id="profile-name-heading">Name</h2>
+      </div>
+      <form className="profile__name-form" onSubmit={event => void handleSubmit(event)} noValidate>
+        <div className="profile__name-row">
+          <TextField
+            label="Display name"
+            value={name}
+            onChange={value => {
+              setTouched(true)
+              setName(value)
+              if (failure !== null) setFailure(null)
+            }}
+            error={fieldError}
+            autoComplete="name"
+            disabled={saving}
+            maxLength={FULL_NAME_MAX_LENGTH}
+          />
+
+          <div className="actions profile__name-actions">
+            <Button
+              type="submit"
+              variant="primary"
+              busy={saving}
+              disabled={!changed || fieldError !== null}
+            >
+              {saving ? 'Saving…' : 'Save name'}
+            </Button>
+            {changed && !saving ? (
+              <Button
+                variant="ghost"
+                onClick={() => {
+                  setName(saved)
+                  setTouched(false)
+                  setFailure(null)
+                }}
+              >
+                Discard
+              </Button>
+            ) : null}
+            <span className={confirmed ? 'saved-mark saved-mark--on' : 'saved-mark'} role="status">
+              {confirmed ? 'Saved' : ''}
+            </span>
+          </div>
+        </div>
 
         {failure ? <InlineError>{failure}</InlineError> : null}
-
-        <div className="actions">
-          <button
-            type="submit"
-            className="button button--primary"
-            disabled={saving || !changed || fieldError !== null}
-          >
-            {saving ? 'Saving…' : 'Save changes'}
-          </button>
-          {changed && !saving ? (
-            <button
-              type="button"
-              className="button button--quiet"
-              onClick={() => {
-                setName(saved)
-                setTouched(false)
-                setFailure(null)
-              }}
-            >
-              Discard
-            </button>
-          ) : null}
-          <span className={confirmed ? 'saved-mark saved-mark--on' : 'saved-mark'} role="status">
-            {confirmed ? 'Saved' : ''}
-          </span>
-        </div>
       </form>
     </section>
-  )
-}
-
-function Avatar({ url, name }: { url: string | null; name: string }) {
-  if (url !== null) {
-    return <img className="avatar" src={url} alt="" width={56} height={56} referrerPolicy="no-referrer" />
-  }
-  const initial = name.trim().charAt(0).toUpperCase()
-  return (
-    <span className="avatar avatar--letter" aria-hidden="true">
-      {initial || '·'}
-    </span>
   )
 }
