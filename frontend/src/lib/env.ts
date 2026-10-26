@@ -26,6 +26,8 @@ export const env = {
   /** Relative by default so the Vite dev proxy handles /api (no CORS setup). */
   apiBaseUrl: read('VITE_API_BASE_URL') || '/api',
   isDev: import.meta.env.DEV,
+  /** VITE_DATA=mock serves synthetic Discover, Vault and Skill Gap data (demos, design QA). */
+  useMockData: read('VITE_DATA') === 'mock',
 } as const
 
 /** Names of the variables the sign-in screen tells the developer to set. */

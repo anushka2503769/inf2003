@@ -228,6 +228,7 @@ def test_every_job_route_uses_the_right_lock_and_authorization() -> None:
     from fastapi.routing import APIRoute
 
     from app import jobs_duplicates, jobs_extraction_router, jobs_search
+    from app.routers import skill_gap
 
     read_deps = {dependencies.get_authenticated_job_db, dependencies.get_admin_job_read_db}
     write_dep = dependencies.get_admin_job_db
@@ -241,7 +242,15 @@ def test_every_job_route_uses_the_right_lock_and_authorization() -> None:
         return found
 
     seen = set()
-    for module in (jobs, jobs_search, jobs_duplicates, jobs_external_multi, jobs_extraction_router):
+    modules = (
+        jobs,
+        jobs_search,
+        jobs_duplicates,
+        jobs_external_multi,
+        jobs_extraction_router,
+        skill_gap,
+    )
+    for module in modules:
         for route in module.router.routes:
             assert isinstance(route, APIRoute)
             for method in route.methods:
@@ -258,6 +267,52 @@ def test_every_job_route_uses_the_right_lock_and_authorization() -> None:
     assert ("POST", "/api/jobs/ingest") in seen
     assert ("GET", "/api/jobs/search") in seen
     assert ("GET", "/api/jobs/duplicates") in seen
+    assert ("GET", "/api/me/skill-gap") in seen
+
+
+def _route_dependencies(route) -> set:
+    stack, found = [route.dependant], set()
+    while stack:
+        node = stack.pop()
+        found.add(node.call)
+        stack.extend(node.dependencies)
+    return found
+
+
+def test_discover_takes_the_shared_read_lock_and_tracker_takes_none(monkeypatch) -> None:
+    from fastapi.routing import APIRoute
+
+    from app.routers import discover, tracker
+
+    job_locks = {
+        dependencies.get_authenticated_job_db,
+        dependencies.get_admin_job_read_db,
+        dependencies.get_admin_job_db,
+        discover.hold_job_read_lock,
+    }
+    discover_routes = [r for r in discover.router.routes if isinstance(r, APIRoute)]
+    assert discover_routes
+    for route in discover_routes:
+        found = _route_dependencies(route)
+        assert discover.hold_job_read_lock in found, route.path
+        assert dependencies.get_admin_job_db not in found, route.path
+    for route in tracker.router.routes:
+        assert isinstance(route, APIRoute)
+        assert not _route_dependencies(route) & job_locks, (route.methods, route.path)
+
+    calls: list[str] = []
+
+    @contextmanager
+    def fake():
+        calls.append("read")
+        yield
+
+    monkeypatch.setattr(discover, "job_read_lock", fake)
+    _drive(
+        discover.hold_job_read_lock,
+        AuthenticatedUser(user_id="00000000-0000-0000-0000-000000000001"),
+    )
+    assert calls == ["read"]
 
 
 def test_admin_read_dependency_takes_shared_lock_and_requires_admin(recorded_locks) -> None:

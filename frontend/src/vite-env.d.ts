@@ -6,6 +6,8 @@ interface ImportMetaEnv {
   readonly VITE_SUPABASE_PUBLISHABLE_KEY?: string
   /** Overrides the default relative '/api' base. Rarely needed in development. */
   readonly VITE_API_BASE_URL?: string
+  /** 'mock' serves synthetic data on Discover, Vault and Skill Gap instead of the API. */
+  readonly VITE_DATA?: string
 }
 
 interface ImportMeta {

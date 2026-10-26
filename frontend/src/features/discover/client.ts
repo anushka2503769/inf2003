@@ -1,3 +1,6 @@
+import { env } from '../../lib/env'
+import { mockDiscoverClient } from './mocks'
+import { realDiscoverClient } from './realClient'
 import type { DiscoverDecision, DiscoverFilters, DiscoverResponse } from './types'
 
 export interface DiscoverClient {
@@ -5,6 +8,5 @@ export interface DiscoverClient {
   decide(jobId: string, status: DiscoverDecision): Promise<void>
 }
 
-// Real client switch: replace this export with the exact line below.
-// export { realDiscoverClient as discoverClient } from './realClient'
-export { mockDiscoverClient as discoverClient } from './mocks'
+// The real API by default; VITE_DATA=mock switches to synthetic data.
+export const discoverClient: DiscoverClient = env.useMockData ? mockDiscoverClient : realDiscoverClient

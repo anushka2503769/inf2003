@@ -29,6 +29,7 @@ export function RequireSession() {
 
 export function RequireProfile() {
   const { status, onboardingComplete, error, reload } = useProfile()
+  const { signOut } = useSession()
 
   if (status === 'idle' || status === 'loading') {
     return <FullPageSpinner label="Loading your profile" />
@@ -45,10 +46,12 @@ export function RequireProfile() {
   if (status === 'error') {
     return (
       <FullPageMessage
-        title="Your profile did not load"
+        title="Your profile did not load."
         body={error ?? 'The server did not answer.'}
         actionLabel="Try again"
         onAction={reload}
+        secondaryLabel="Sign out"
+        onSecondary={() => void signOut()}
       />
     )
   }

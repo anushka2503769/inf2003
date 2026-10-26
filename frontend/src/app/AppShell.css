@@ -1,0 +1,304 @@
+/*
+ * App shell: sidebar on desktop (>= 768px), top bar + bottom tab bar on mobile.
+ * Values come from src/styles/tokens.css.
+ */
+
+.shell {
+  display: grid;
+  grid-template-columns: var(--sidebar-width) minmax(0, 1fr);
+  min-height: 100vh;
+  min-height: 100dvh;
+}
+
+/* ------------------------------------------------------------------ sidebar */
+.sidebar {
+  position: sticky;
+  top: 0;
+  height: 100vh;
+  height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+  padding: var(--space-4) var(--space-3);
+  background: var(--color-sidebar);
+  border-right: 1px solid var(--color-border);
+}
+
+.sidebar__brand {
+  align-self: flex-start;
+}
+
+.nav {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-hair);
+}
+
+.nav__item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  height: 36px;
+  padding: 0 var(--space-2);
+  border-radius: var(--radius-md);
+  color: var(--color-ink-2);
+  font-weight: var(--weight-medium);
+  text-decoration: none;
+  transition: background-color var(--duration-fast) var(--ease-out);
+}
+
+.nav__item .icon {
+  color: var(--color-ink-3);
+}
+
+.nav__item:hover {
+  background: var(--color-hover);
+  color: var(--color-ink);
+}
+
+.nav__item[aria-current='page'] {
+  background: var(--color-selected);
+  color: var(--color-ink);
+}
+
+.nav__item[aria-current='page'] .icon {
+  color: var(--color-ink);
+}
+
+.nav__count {
+  margin-left: auto;
+  font-variant-numeric: tabular-nums;
+  font-size: var(--text-xs);
+  color: var(--color-ink-3);
+}
+
+.account {
+  margin-top: auto;
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  padding: var(--space-1);
+  border-radius: var(--radius-md);
+}
+
+.account.is-open {
+  background: var(--color-selected);
+}
+
+.account__toggle {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-1);
+  border: 0;
+  border-radius: var(--radius-md);
+  background: transparent;
+  color: var(--color-ink);
+  text-align: left;
+  cursor: pointer;
+}
+
+.account__toggle:hover {
+  background: var(--color-hover);
+}
+
+.account.is-open .account__toggle:hover {
+  background: transparent;
+}
+
+.account__text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.account__name,
+.account__mail {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.account__name {
+  font-weight: var(--weight-medium);
+}
+
+.account__mail {
+  font-size: var(--text-xs);
+  line-height: var(--leading-xs);
+  color: var(--color-ink-3);
+}
+
+.shell-avatar {
+  width: 32px;
+  height: 32px;
+  border-radius: var(--radius-full);
+  background: var(--color-accent-soft);
+  color: var(--color-accent-ink);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: var(--text-sm);
+  font-weight: var(--weight-semibold);
+  flex: none;
+}
+
+.shell-avatar--sm {
+  width: 28px;
+  height: 28px;
+  font-size: var(--text-xs);
+}
+
+/* ------------------------------------------------------------------ account menu */
+.account-menu {
+  position: absolute;
+  z-index: var(--z-popover);
+  width: 224px;
+}
+
+.account-menu--sidebar {
+  left: var(--space-3);
+  bottom: 72px;
+}
+
+.account-menu--topbar {
+  right: var(--space-2);
+  top: calc(100% + var(--space-1));
+}
+
+.account-menu__email {
+  font-weight: var(--weight-medium);
+  overflow-wrap: anywhere;
+}
+
+/* ------------------------------------------------------------------ main column */
+.shell__main {
+  min-width: 0;
+  display: flex;
+  justify-content: center;
+  padding: var(--space-8) var(--space-8) var(--space-9);
+}
+
+.shell__main:focus {
+  outline: none;
+}
+
+.shell__column {
+  width: 100%;
+  max-width: var(--column-discover);
+  min-width: 0;
+}
+
+.shell__column--wide {
+  max-width: var(--column-wide);
+}
+
+/* ------------------------------------------------------------------ mobile bars */
+.topbar,
+.tabbar {
+  display: none;
+}
+
+@media (max-width: 1023.98px) {
+  .shell__main {
+    padding: var(--space-7) var(--space-6) var(--space-8);
+  }
+}
+
+@media (max-width: 767.98px) {
+  .shell {
+    display: block;
+  }
+
+  .sidebar {
+    display: none;
+  }
+
+  .topbar {
+    position: sticky;
+    top: 0;
+    z-index: var(--z-sticky);
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    height: var(--topbar-height);
+    padding: 0 var(--space-2) 0 var(--space-4);
+    background: var(--color-canvas);
+    border-bottom: 1px solid var(--color-border);
+  }
+
+  .topbar__title {
+    flex: 1;
+    min-width: 0;
+    font-weight: var(--weight-semibold);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .topbar__account {
+    width: var(--touch-min);
+    height: var(--touch-min);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    border: 0;
+    border-radius: var(--radius-full);
+    background: transparent;
+    cursor: pointer;
+  }
+
+  .shell__main {
+    display: block;
+    padding: var(--space-5) var(--space-4)
+      calc(var(--tabbar-height) + var(--space-6) + env(safe-area-inset-bottom, 0px));
+  }
+
+  .tabbar {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: var(--z-sticky);
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    padding: var(--space-1) var(--space-2) calc(var(--space-1) + env(safe-area-inset-bottom, 0px));
+    background: var(--color-canvas);
+    border-top: 1px solid var(--color-border);
+  }
+
+  .tabbar__item {
+    min-height: 52px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: var(--space-hair);
+    border-radius: var(--radius-md);
+    font-size: var(--text-xs);
+    line-height: var(--leading-xs);
+    font-weight: var(--weight-medium);
+    color: var(--color-ink-3);
+    text-decoration: none;
+  }
+
+  .tabbar__item .icon {
+    width: 22px;
+    height: 22px;
+  }
+
+  .tabbar__item[aria-current='page'] {
+    color: var(--color-ink);
+  }
+
+  .tabbar__item[aria-current='page'] .icon {
+    color: var(--color-accent);
+  }
+
+  .tabbar__item:focus-visible {
+    outline-offset: -2px;
+  }
+}

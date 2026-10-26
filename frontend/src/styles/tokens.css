@@ -1,0 +1,144 @@
+/*
+ * Jobless Simulator - design tokens (UI v1, direction "The Notebook").
+ * Every colour used in the design documents comes from this file.
+ * Light theme is the default; dark theme lives under [data-theme="dark"].
+ * Copied from the design hand-off (Figma wahBUi8w3scqzkMs765Pmv). Component CSS
+ * must read colours, type and spacing from these variables, never raw values.
+ * Contrast notes (WCAG 2.x, measured against the surface they sit on):
+ *   ink 16.1:1 on canvas, ink-2 6.5:1, ink-3 5.4:1 (5.1:1 on sidebar, 4.8:1 on sunken),
+ *   accent 6.4:1, badges 5.9-7.7:1, border-strong 3.4:1 (non-text UI).
+ */
+:root {
+  /* Surfaces */
+  --color-canvas: #FFFFFF;          /* page background */
+  --color-sidebar: #F7F7F5;         /* navigation rail, quiet panels */
+  --color-sunken: #F1F0EC;          /* inputs on hover, neutral badges, skeleton base */
+  --color-hover: #EFEEEA;           /* row and nav hover */
+  --color-selected: #EAE9E4;        /* active nav item */
+  --color-scrim: rgba(34, 33, 31, 0.32);
+
+  /* Lines */
+  --color-border: #E6E5E1;          /* hairline dividers, card outline */
+  --color-border-strong: #8E8C85;   /* input outline, empty meter cell (3.4:1) */
+
+  /* Text */
+  --color-ink: #22211F;             /* primary text, primary button fill */
+  --color-ink-2: #5F5E59;           /* secondary text */
+  --color-ink-3: #6B6A64;           /* tertiary text, placeholders, meta */
+  --color-ink-disabled: #A5A39C;    /* disabled labels only */
+  --color-on-primary: #FFFFFF;
+  --color-primary-hover: #3A3936;
+  --color-kbd-on-primary: rgba(255, 255, 255, 0.4);
+
+  /* The one accent: ledger green. Matches, focus, links, meters. */
+  --color-accent: #1F6B4E;
+  --color-accent-hover: #18573F;
+  --color-accent-soft: #E7F2EC;
+  --color-accent-ink: #1A5C43;
+
+  /* Semantic pastels (always paired with a text label or glyph) */
+  --color-gap-soft: #FBF1DA;
+  --color-gap-ink: #7A4E00;
+  --color-danger: #B3261E;
+  --color-danger-soft: #FCEBEA;
+  --color-danger-ink: #A3241B;
+  --color-info-soft: #E5F1FA;
+  --color-info-ink: #1D5F8C;
+  --color-neutral-soft: #F1F0EC;
+  --color-neutral-ink: #4C4B47;
+
+  /* Brand mark on the sign-in button only */
+  --color-google-blue: #4285F4;
+  --color-google-green: #34A853;
+  --color-google-yellow: #FBBC05;
+  --color-google-red: #EA4335;
+
+  /* Type */
+  --font-sans: 'Instrument Sans', -apple-system, 'Segoe UI', system-ui, sans-serif;
+  --font-serif: 'Newsreader', 'Iowan Old Style', Charter, serif;
+  --font-mono: 'IBM Plex Mono', ui-monospace, 'SF Mono', Menlo, monospace;
+
+  --text-xs: 12px;   --leading-xs: 16px;   /* kbd, counts, tiny meta */
+  --text-sm: 13px;   --leading-sm: 18px;   /* meta, badges, helper */
+  --text-md: 14px;   --leading-md: 20px;   /* UI default: buttons, rows, inputs */
+  --text-lg: 16px;   --leading-lg: 24px;   /* body copy */
+  --text-xl: 20px;   --leading-xl: 28px;   /* section heading (sans 600) */
+  --text-2xl: 28px;  --leading-2xl: 34px;  /* serif card title, mobile page title */
+  --text-3xl: 36px;  --leading-3xl: 42px;  /* serif page title */
+  --text-4xl: 48px;  --leading-4xl: 52px;  /* serif sign-in display */
+
+  --weight-regular: 400;
+  --weight-medium: 500;
+  --weight-semibold: 600;
+  --tracking-tight: -0.02em;
+  --tracking-label: 0.06em;           /* uppercase micro-labels (REQUIRED / PREFERRED) */
+
+  /* Spacing (4px base) */
+  --space-1: 4px;  --space-2: 8px;  --space-3: 12px; --space-4: 16px;
+  --space-5: 24px; --space-6: 32px; --space-7: 48px; --space-8: 64px; --space-9: 96px;
+  --space-hair: 2px; /* between stacked nav items */
+  --control-pad-sm: 10px; --control-pad: 14px; --control-pad-lg: 18px; /* horizontal padding inside controls */
+
+  /* Radius */
+  --radius-sm: 4px;    /* badges, chips, kbd, meter cells */
+  --radius-md: 6px;    /* buttons, inputs, selects, tabs */
+  --radius-lg: 10px;   /* cards, panels, sheets */
+  --radius-full: 999px;/* avatar, spinner only */
+
+  /* Elevation: almost none. Popovers get one soft lift. */
+  --shadow-1: 0 1px 2px rgba(34, 33, 31, 0.04);
+  --shadow-pop: 0 0 0 1px rgba(34, 33, 31, 0.06), 0 6px 20px rgba(34, 33, 31, 0.08);
+  --focus-ring: 0 0 0 2px var(--color-canvas), 0 0 0 4px var(--color-accent);
+
+  /* Layout */
+  --sidebar-width: 248px;
+  --column-discover: 720px;
+  --column-wide: 960px;
+  --touch-min: 44px;
+
+  /* App additions (not in the hand-off): layers, mobile bars, motion. */
+  --z-sticky: 10;
+  --z-popover: 20;
+  --z-skip: 30;
+  --topbar-height: 52px;
+  --tabbar-height: 60px;
+  --duration-fast: 120ms;
+  --duration-base: 180ms;
+  --ease-out: cubic-bezier(0.2, 0.7, 0.2, 1);
+  --border-width-strong: 1.5px;
+
+  color-scheme: light;
+}
+
+[data-theme="dark"] {
+  --color-canvas: #191918;
+  --color-sidebar: #202020;
+  --color-sunken: #262624;
+  --color-hover: #2A2A28;
+  --color-selected: #30302D;
+  --color-scrim: rgba(0, 0, 0, 0.5);
+  --color-border: #2F2F2C;
+  --color-border-strong: #72706A;
+  --color-ink: #ECEBE7;
+  --color-ink-2: #A9A7A1;
+  --color-ink-3: #8E8C86;
+  --color-ink-disabled: #5E5D58;
+  --color-on-primary: #191918;
+  --color-primary-hover: #D6D5D0;
+  --color-kbd-on-primary: rgba(25, 25, 24, 0.35);
+  --color-accent: #5FC295;
+  --color-accent-hover: #7BD3AA;
+  --color-accent-soft: #173027;
+  --color-accent-ink: #7BD3AA;
+  --color-gap-soft: #2B2414;
+  --color-gap-ink: #E9B95A;
+  --color-danger: #F08C84;
+  --color-danger-soft: #2E1A18;
+  --color-danger-ink: #F08C84;
+  --color-info-soft: #16252F;
+  --color-info-ink: #8CC3EA;
+  --color-neutral-soft: #2A2A28;
+  --color-neutral-ink: #C9C7C1;
+  --shadow-pop: 0 0 0 1px rgba(255, 255, 255, 0.06), 0 6px 20px rgba(0, 0, 0, 0.4);
+  color-scheme: dark;
+}
