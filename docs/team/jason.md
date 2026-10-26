@@ -211,3 +211,11 @@ sign-in configured first.
 - Unverified: not run against Supabase or at WP-10 scale.
 - Open questions: `JobSummary` is also appended by WP-2; keep one copy on integration.
   `q` is case-insensitive (ILIKE) although API §7 only says "literal substring".
+
+### WP-3 follow-up: API wording for `q` (2026-10-26)
+
+- Decided by Zhihao: keep case-insensitive `q` (ILIKE). API.md §7 now says "literal
+  case-insensitive substring of title or company", matching `location` and the code.
+  Doc only; no code change. Covered by `test_q_wildcards_are_literal` and `test_filters[*]`.
+- At integration, after WP-0 merges: switch Discover's `job_pipeline_lock()` to
+  `job_read_lock()` (same lock, clearer name).
