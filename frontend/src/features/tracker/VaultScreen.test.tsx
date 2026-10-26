@@ -377,4 +377,45 @@ describe('VaultScreen', () => {
 
     expect(await screen.findByText('No jobs in Interview yet.')).toBeInTheDocument()
   })
+
+  it('exposes the status tabs, not the mobile "Show" dropdown, on desktop', async () => {
+    render(<VaultScreen client={fakeClient()} />)
+
+    expect(await screen.findByRole('tablist', { name: 'Tracker status' })).toBeInTheDocument()
+    expect(screen.queryByRole('combobox', { name: 'Show' })).not.toBeInTheDocument()
+    expect(screen.getByRole('tabpanel')).toBeInTheDocument()
+  })
+
+  it('replaces the tabs with a labelled "Show" dropdown on mobile', async () => {
+    const original = window.matchMedia
+    window.matchMedia = vi.fn((query: string) => ({
+      matches: query.includes('max-width'),
+      media: query,
+      onchange: null,
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+      addListener: vi.fn(),
+      removeListener: vi.fn(),
+      dispatchEvent: vi.fn(() => false),
+    })) as unknown as typeof window.matchMedia
+    try {
+      const client = fakeClient()
+      const user = userEvent.setup()
+      render(<VaultScreen client={client} />)
+
+      await screen.findByRole('heading', { name: JOB.title })
+      expect(screen.queryByRole('tablist')).not.toBeInTheDocument()
+      expect(screen.queryByRole('tab')).not.toBeInTheDocument()
+      const show = screen.getByRole('combobox', { name: 'Show' })
+      expect(show).toHaveValue('SAVED')
+      expect(within(show).getByRole('option', { name: 'Applied (3)' })).toBeInTheDocument()
+      expect(screen.getByRole('region', { name: 'Saved jobs' })).toBeInTheDocument()
+
+      await user.selectOptions(show, 'APPLIED')
+      expect(client.list).toHaveBeenLastCalledWith('APPLIED', 20, 0)
+      expect(await screen.findByText('No jobs in Applied yet.')).toBeInTheDocument()
+    } finally {
+      window.matchMedia = original
+    }
+  })
 })
