@@ -65,3 +65,16 @@ Inspect current state before starting. Append task/result/check/PR/next-step not
 
 - Reviewer findings fixed: (1) filters/Check again/Try again are blocked while decision PUTs are pending, so a failed PUT always restores its card with a visible retry; (2) onProfileMissing guarded in its own try/catch after error/rollback state is set; (3) empty state hidden and "Saving your decision…" shown while PUTs are pending; (4) maxLength 100 on Location/Keyword plus a distinct validation_failed message; (5) 404 `job` drops the card with "This job is no longer available."; (6) real client PUT test asserts the URL; (7) focus moves to the next card, buttons named with the job title, aria-keyshortcuts on the first card; (8) "Open posting" only for http(s) URLs. Added tests for Change filters / Check again.
 - Checks: `cd frontend && npm test` — 5 files, 66 tests passed; `npm run build` — passed.
+
+### Redesign B2 Discover progress note (2026-10-26)
+
+- Branch: `feat/redesign-b2-discover` (built by the JARVIS designer agent; Zhihao reviews and commits).
+- Result: Discover restyled to "The Notebook" on the B1 foundation. One job card at a time, segmented
+  coverage meter (one cell per required skill), arrow-key hints on Not interested / Save, plain check and
+  dash markers for "You have" / "Missing" (not checkbox-shaped), inline failure with Retry, empty and
+  loading states, and on mobile the filters open in a bottom sheet (Escape or the X closes it).
+- Behaviour kept: optimistic remove, rollback + Retry, filter lock while a decision is pending, prefetch,
+  Left/Right shortcuts (ignored while typing and while the sheet is open), 404 job drops the card,
+  http(s)-only posting link. A missing profile now shows "Let's set up your profile first" with Go now.
+- Preview scenes: `frontend/src/preview/scenes-b2.tsx` (`/__preview/discover-*` on the dev server).
+- Tests: copy-driven assertions in `DiscoverFeed.test.tsx` updated to the new strings and the one-card view.
