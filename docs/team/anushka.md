@@ -212,7 +212,7 @@ assumed from memory of an earlier session):
 
 ### UI polish progress note (2026-10-26)
 
-- Branch: feat/ui-foundation-polish. commit: (filled in by orchestrator)
+- Branch: feat/ui-foundation-polish. commit: 0e70ef7
 - Done: Select chevron (Phosphor caret-down via `--select-chevron` token, light and dark); Button accepts a `ref` prop (test in `frontend/src/components/Button.test.tsx`), Discover Filters and Vault Cancel now use the shared Button; shared `.page-head` / `__title` / `__lede` in `styles/components.css` used by Discover, Vault, Skill Gap, Profile (per-feature duplicates deleted); unused rules and legacy token aliases removed from `frontend/src/style.css` (it still holds the style-layer imports and a few live classes, so it stays).
 - Skill Gap width: already capped at `--column-discover` (720px), matching shots/skill-gap-loaded.png, so no change was made.
 - Checks: `npm test` 12 files / 118 tests passed; `npm run build` passed; no JOBLESS_PREVIEW_HARNESS in dist.
