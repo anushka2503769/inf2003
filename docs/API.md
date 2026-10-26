@@ -1,9 +1,11 @@
 # API contract v2
 
-Status: **25 October 2026.** §1–§5 and §9 describe routes that are **implemented** on `dev`
-(5dedfcb); §5 additions, §6, §7 and §8 are **to build** (marked *new*) under the work
-packages in [PRD.md](PRD.md). FastAPI's OpenAPI output (`/docs`) is the final word for
-implemented routes; when a PR changes a shape it updates this file in the same PR.
+Status: **26 October 2026.** §1–§4 and §6–§9 describe routes that are **implemented**
+(including the tracker, Discover and skill-gap routes); in §5 only the rows and fields
+marked *new* (`GET /api/me/resume`, `suggested_skills`, the profile-first upload check) are
+**to build** under the work packages in [PRD.md](PRD.md). FastAPI's OpenAPI output
+(`/docs`) is the final word for implemented routes; when a PR changes a shape it updates
+this file in the same PR.
 
 ## 1. Conventions
 
@@ -94,7 +96,7 @@ ResumeResponse = {
 by name. Names that are not in the dictionary are dropped. Suggestions are never saved
 automatically; the client confirms them with `PUT /api/me/skills/{id}`.
 
-## 6. Tracker *(new — WP-2)*
+## 6. Tracker *(WP-2, implemented)*
 
 ```ts
 TrackerStatus = 'NOT_INTERESTED' | 'SAVED' | 'APPLIED' | 'INTERVIEW' | 'REJECTED' | 'OFFER'
@@ -131,7 +133,7 @@ Body `{ "status": TrackerStatus }`. Creates or updates the caller's decision for
 Removes the caller's decision (undo; the job can reappear in Discover). 204, idempotent.
 404 `profile` if no profile.
 
-## 7. Discover *(new — WP-3)*
+## 7. Discover *(WP-3, implemented)*
 
 ### `GET /api/discover`
 
@@ -165,7 +167,7 @@ Order: `coverage` desc (nulls last), `preferred_matched` desc, `source_posted_at
 
 Errors: 404 `profile`; 422 for invalid filters or unknown query params.
 
-## 8. Skill gap *(new — WP-4)*
+## 8. Skill gap *(WP-4, implemented)*
 
 ### `GET /api/skill-gap/roles`
 

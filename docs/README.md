@@ -8,9 +8,6 @@ skills run on Supabase PostgreSQL; resume upload and job ingestion write MongoDB
 tracker and skill-gap features are being built under [PRD v2](PRD.md) work packages.
 Without `DATABASE_URL` the API falls back to an in-memory profile store (profiles only).
 
-> Known issue until WP-0 lands: `frontend/vite.config.ts` is missing, so `npm run dev`
-> does not proxy `/api` to the backend. See PRD §3.
-
 ## Team
 
 | Members | Responsibility |
@@ -21,9 +18,13 @@ Without `DATABASE_URL` the API falls back to an in-memory profile store (profile
 
 ## First-time setup
 
+A complete, step-by-step guide for a fresh machine (own Supabase project, MongoDB Atlas
+cluster, running, loading jobs, troubleshooting) is the [user manual](USER_MANUAL.md).
+The short version follows.
+
 Install Git, Node.js **22.12+ within the 22.x line** (use `.nvmrc` with nvm), and
 [uv](https://docs.astral.sh/uv/getting-started/installation/). uv installs the
-Python **3.14** runtime selected in `backend/.python-version` if needed.
+Python runtime selected in `backend/.python-version` (3.12) if needed.
 Run these commands from the repository root after cloning:
 
 ```sh
@@ -171,6 +172,7 @@ backend/.env.example           Safe backend configuration template
 .github/                       CI workflow
 docs/erd.md                    Schema, relationships and planned migration 003
 docs/PRD.md                    PRD v2: scope, decisions and work packages WP-0..WP-11
+docs/USER_MANUAL.md            Setup and run guide for a fresh machine
 docs/API.md                    Request/response contract (implemented and planned routes)
 docs/job-pipeline.md           Cross-database job ingestion rules
 docs/pull-request-template.md  Pull-request review checklist reference

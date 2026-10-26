@@ -337,17 +337,13 @@ textarea.field__input {
   cursor: not-allowed;
 }
 
-/* Native select drawn like the hand-off .select: caret from two gradients. */
+/* Native select drawn like the hand-off .select, with the Phosphor caret-down. */
 select.field__input {
   appearance: none;
   padding-right: calc(var(--space-3) + var(--space-5));
-  background-image:
-    linear-gradient(45deg, transparent 50%, var(--color-ink-3) 50%),
-    linear-gradient(135deg, var(--color-ink-3) 50%, transparent 50%);
-  background-position:
-    calc(100% - 19px) 50%,
-    calc(100% - 14px) 50%;
-  background-size: 5px 5px;
+  background-image: var(--select-chevron);
+  background-position: right var(--space-3) center;
+  background-size: 16px 16px;
   background-repeat: no-repeat;
   cursor: pointer;
   text-overflow: ellipsis;
@@ -954,6 +950,40 @@ select.field__input {
   display: flex;
   align-items: center;
   gap: var(--space-2);
+}
+
+/* ------------------------------------------------------------------ page head */
+/* Title and intro block at the top of every screen (Discover, Vault, Skill Gap, Profile). */
+.page-head {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.page-head__title {
+  font-family: var(--font-serif);
+  font-weight: var(--weight-regular);
+  font-size: var(--text-3xl);
+  line-height: var(--leading-3xl);
+  letter-spacing: var(--tracking-tight);
+}
+
+.page-head__lede {
+  font-size: var(--text-lg);
+  line-height: var(--leading-lg);
+  color: var(--color-ink-2);
+}
+
+@media (max-width: 767.98px) {
+  .page-head__title {
+    font-size: var(--text-2xl);
+    line-height: var(--leading-2xl);
+    letter-spacing: -0.01em;
+  }
+
+  .page-head__lede {
+    display: none;
+  }
 }
 
 /* ------------------------------------------------------------------ mobile tap targets */
