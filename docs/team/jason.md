@@ -168,7 +168,7 @@ sign-in configured first.
 
 ### WP-1 progress note (overnight 2026-10-26)
 
-- Branch: `feat/wp1-sql-003`; commit: (filled in by orchestrator).
+- Branch: `feat/wp1-sql-003`; commit: `7fa1ef6` (build) + `17939f8` (review fix round); orchestrator re-ran checks on `17939f8`: ruff clean, pytest 51 passed / 51 skipped, disposable DB 102 passed.
 - Delivered `docs/DB/003_views_triggers_indexes.sql`, `backend/tests/test_sql_003.py`, the
   disposable script now applies 001 then 003 (not 002), and the erd.md "Migration 003" section.
 - Checks: `bash backend/scripts/run_disposable_db_tests.sh` -> 98 passed; ruff check, ruff
@@ -186,7 +186,34 @@ sign-in configured first.
   inactive jobs still fail with 23514. Concurrent DELETE plus upsert race is documented in the
   SQL, not solved.
 - 003 was edited in place; it has not been applied to Supabase yet, so no new migration.
-- Regression tests added for the exact upsert statement; commit: (filled in by orchestrator).
+- Regression tests added for the exact upsert statement; commit: `7fa1ef6` (build) + `17939f8` (review fix round); orchestrator re-ran checks on `17939f8`: ruff clean, pytest 51 passed / 51 skipped, disposable DB 102 passed.
+
+### WP-2 progress note (overnight 2026-10-26)
+
+- Branch: `feat/wp2-tracker-api`; commit: `f8a1955` (build) + `b2584b9` (review fix round); orchestrator re-ran checks on `b2584b9`: ruff clean, pytest 77 passed / 65 skipped, disposable DB 142 passed (rebased onto WP-1 17939f8).
+- Delivered `sql_tracker.py`, `routers/tracker.py`, tracker models appended to `schemas.py`,
+  one `include_router` line (plus the router import) in `main.py`, and route + disposable-DB
+  SQL tests.
+- Checks: `bash backend/scripts/run_disposable_db_tests.sh` -> 131 passed; ruff check, ruff
+  format --check pass; plain `pytest` -> 71 passed, 60 skipped.
+- Deviation from the PRD wording: `PUT` is one statement but not a bare `INSERT ... ON CONFLICT`.
+  PostgreSQL fires the BEFORE INSERT active-job trigger before conflict detection, so a bare
+  upsert would reject updates of rows whose job went inactive. The statement is a CTE: UPDATE
+  first, INSERT ... ON CONFLICT DO UPDATE only if nothing matched.
+- `GET /api/me/jobs` and `/summary` for a user with no profile return empty/zero (no 404);
+  API.md only specifies 404 `profile` for PUT and DELETE.
+- Unverified: not run against Supabase. Human step for Jason: apply migration 003 to the shared
+  Supabase project before merging this branch (the route relies on its trigger and view).
+- Open questions: should GET list/summary return 404 `profile` when there is no profile?
+
+#### WP-2 fix round
+
+- `PUT`/`DELETE` now reject unknown query parameters (422) before touching the store.
+- A failed `PUT` is classified by the original error: user FK -> profile, job FK -> job (by
+  constraint name, pinned by a disposable-DB test); only the trigger's 23514 re-checks the profile.
+- Once WP-1's trigger fix (row-exists pass-through) merges, `PUT` could be simplified to the
+  bare `INSERT ... ON CONFLICT DO UPDATE`; the CTE is correct under both trigger versions.
+- Checks: ruff check, ruff format --check pass; pytest 77 passed, 61 skipped; disposable DB 138 passed.
 
 ### WP-3 progress note (overnight 2026-10-26)
 

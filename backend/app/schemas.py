@@ -100,6 +100,9 @@ class ResumeUploadResponse(BaseModel):
     extracted_data: ExtractedData
 
 
+TrackerStatus = Literal["NOT_INTERESTED", "SAVED", "APPLIED", "INTERVIEW", "REJECTED", "OFFER"]
+
+
 class JobSummary(BaseModel):
     """The job fields a tracker row carries (docs/API.md section 6)."""
 
@@ -115,8 +118,28 @@ class JobSummary(BaseModel):
     is_active: bool
 
 
-# Discover (docs/API.md section 7). JobSummary above is the same model WP-2's
-# tracker appends; keep one copy when the two branches are integrated.
+class TrackerItem(BaseModel):
+    job: JobSummary
+    status: TrackerStatus
+    created_at: datetime
+    updated_at: datetime
+
+
+class TrackerPutRequest(BaseModel):
+    status: TrackerStatus
+
+
+class TrackerListResponse(BaseModel):
+    items: list[TrackerItem]
+    total: int
+
+
+class TrackerSummaryResponse(BaseModel):
+    counts: dict[TrackerStatus, int]
+    total: int
+
+
+# Discover (docs/API.md section 7). JobSummary above is shared with the tracker.
 JobType = Literal["FULL_TIME", "PART_TIME", "INTERNSHIP"]
 WorkArrangement = Literal["ONSITE", "HYBRID", "REMOTE"]
 

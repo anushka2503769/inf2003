@@ -52,3 +52,44 @@ Initial status: guides, API contract and bootstrap scripts are prepared locally;
 publication, applied database state and feature completion must be checked. Only the
 starter/health flow has implementation evidence at guide creation. Append reviewed
 task/PR, integration checks and next milestone notes here without duplicating everyone’s logs.
+
+### WP-0 progress note (overnight 2026-10-26)
+
+- Branch: `fix/wp0-dev-proxy-and-read-lock`
+- Commit: `8742c4d` (build) + `67a429c` (review fix round); orchestrator re-ran checks on `67a429c`: ruff clean, pytest 58 passed / 39 skipped, disposable DB 97 passed
+- Changes: recreated `frontend/vite.config.ts` (React plugin, host 127.0.0.1, port 5173,
+  `/api` proxy to 127.0.0.1:8000; `vitest.config.ts` kept). Advisory lock split in
+  `backend/app/sql_access.py`: `job_read_lock()` (`pg_advisory_xact_lock_shared(2003001)`)
+  and `job_write_lock()` (`pg_advisory_xact_lock(2003001)`), both after
+  `SET LOCAL lock_timeout = '3s'`; a timeout (55P03) maps to the existing 503
+  `service_unavailable`. `job_pipeline_lock` remains as an alias of `job_read_lock`.
+  Authenticated read routes use the read lock, admin write routes the write lock.
+- Checks: ruff check passed; ruff format --check passed (51 files); pytest 57 passed,
+  39 skipped; disposable DB script 96 passed (includes the real-Postgres shared/exclusive
+  lock test); frontend `npm test` 44 passed, `npm run build` clean.
+- Proxy AC: backend (no env file) + `npm run dev`, then
+  `curl -sS -i http://127.0.0.1:5173/api/health` returned `HTTP/1.1 200 OK` with body
+  `{"status":"ok","service":"jobless-simulator-api"}`.
+- Unverified: not run against Supabase.
+- Open questions: none.
+
+#### WP-0 fix round
+
+- Added `get_admin_job_read_db` / `AdminJobReadDatabase` in `backend/app/dependencies.py`: admin
+  authorization first, then the shared read lock.
+- Open question for Zhihao: `GET /api/jobs/duplicates` (`backend/app/jobs_duplicates.py:117`) is
+  read-only but still uses the exclusive `AdminJobDatabase` (that file is outside WP-0). One-line
+  fix: change its parameter to `db: AdminJobReadDatabase` and import `AdminJobReadDatabase`
+  instead of `AdminJobDatabase` from `.dependencies` (keep the import for `delete_duplicates`).
+- Route-wiring test now enumerates every job route (jobs, search, duplicates, external multi,
+  extraction); the duplicates preview is a listed known exception. Mutating fetch-multi to the
+  read dependency made the test fail (verified, then restored).
+
+### WP-0 follow-up: duplicates preview takes the shared lock (2026-10-26)
+
+- Branch: `fix/duplicates-read-lock` (on `fix/wp0-dev-proxy-and-read-lock`), approved by Zhihao.
+- `GET /api/jobs/duplicates` now uses `AdminJobReadDatabase` (admin auth + shared lock), so
+  it no longer blocks student reads. `DELETE /api/jobs/duplicates` keeps the exclusive lock.
+- The route-wiring test's known exception is removed; it now asserts the duplicates GET is
+  covered and fails on the old dependency.
+- Checks: ruff and format clean; pytest `58 passed, 39 skipped`; disposable DB `97 passed`.
