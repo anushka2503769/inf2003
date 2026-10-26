@@ -13,8 +13,8 @@
  * The shell's CSS sits next to it in src/app/AppShell.css.
  *
  * Below the imports are the few pre-redesign global classes something still
- * uses (.note, .actions, .step-count, .saved-mark, and the NotBuiltYet
- * placeholder's heading-1/rule/stack/prose). Delete an entry once nothing uses it.
+ * uses (.note, .actions, .step-count, .saved-mark). Delete an entry once
+ * nothing uses it.
  */
 
 @import './styles/tokens.css';
@@ -26,21 +26,6 @@
 /* -------------------------------------------------------------------------- */
 /* Legacy type classes                                                         */
 /* -------------------------------------------------------------------------- */
-
-.heading-1 {
-  font-family: var(--font-serif);
-  font-weight: var(--weight-regular);
-  font-size: var(--text-3xl);
-  line-height: var(--leading-3xl);
-  letter-spacing: var(--tracking-tight);
-}
-
-.prose {
-  font-size: var(--text-lg);
-  line-height: var(--leading-lg);
-  color: var(--color-ink-2);
-  max-width: 62ch;
-}
 
 .note {
   font-size: var(--text-sm);
@@ -60,20 +45,6 @@
 /* -------------------------------------------------------------------------- */
 /* Legacy layout helpers                                                       */
 /* -------------------------------------------------------------------------- */
-
-.rule {
-  border: 0;
-  border-top: 1px solid var(--color-border);
-  margin: var(--space-2) 0 var(--space-4);
-}
-
-.stack > * + * {
-  margin-top: var(--space-5);
-}
-
-.stack > .rule + * {
-  margin-top: 0;
-}
 
 .actions {
   display: flex;
