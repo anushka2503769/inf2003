@@ -165,3 +165,25 @@ sign-in configured first.
   overwrites an existing name), plus the `details.resource` convention; and
   `docs/DB/README.md` needs a line documenting `002`.
 - Confirm Zhihao has access to the Supabase project.
+
+### WP-1 progress note (overnight 2026-10-26)
+
+- Branch: `feat/wp1-sql-003`; commit: `7fa1ef6` (build) + `17939f8` (review fix round); orchestrator re-ran checks on `17939f8`: ruff clean, pytest 51 passed / 51 skipped, disposable DB 102 passed.
+- Delivered `docs/DB/003_views_triggers_indexes.sql`, `backend/tests/test_sql_003.py`, the
+  disposable script now applies 001 then 003 (not 002), and the erd.md "Migration 003" section.
+- Checks: `bash backend/scripts/run_disposable_db_tests.sh` -> 98 passed; ruff check, ruff
+  format --check and plain `pytest` (SQL tests skip) pass.
+- The EXPLAIN test sets `enable_seqscan = off` because the synthetic table is tiny; it proves
+  the partial indexes are usable and chosen, not that the planner picks them unaided.
+- Unverified: not run against Supabase. Human step for Jason: apply 003 to the shared
+  Supabase project and record date and commit in `docs/DB/README.md` (not edited here).
+- Open questions: none.
+
+#### WP-1 fix round
+- `user_jobs_require_active_job()` now allows the insert when a `(user_id, job_id)` row already
+  exists, because PostgreSQL fires BEFORE INSERT triggers before detecting ON CONFLICT; the
+  WP-2 upsert on an existing row of a deactivated job previously raised 23514. New rows for
+  inactive jobs still fail with 23514. Concurrent DELETE plus upsert race is documented in the
+  SQL, not solved.
+- 003 was edited in place; it has not been applied to Supabase yet, so no new migration.
+- Regression tests added for the exact upsert statement; commit: `7fa1ef6` (build) + `17939f8` (review fix round); orchestrator re-ran checks on `17939f8`: ruff clean, pytest 51 passed / 51 skipped, disposable DB 102 passed.
