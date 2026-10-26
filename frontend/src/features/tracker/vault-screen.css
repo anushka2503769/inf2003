@@ -17,12 +17,6 @@
   display: none !important;
 }
 
-.vault .vault__head {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-2);
-}
-
 /* ------------------------------------------------------------------ mobile status dropdown */
 .vault .vault__show .field {
   display: grid;
@@ -209,13 +203,6 @@
     gap: var(--space-4);
   }
 
-  .vault .vault__title-page {
-    font-size: var(--text-2xl);
-    line-height: var(--leading-2xl);
-    letter-spacing: -0.01em;
-  }
-
-  .vault .vault__lede,
   .vault .vault__table-head {
     display: none;
   }

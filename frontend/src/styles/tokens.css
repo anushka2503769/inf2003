@@ -25,6 +25,7 @@
   --color-ink: #22211F;             /* primary text, primary button fill */
   --color-ink-2: #5F5E59;           /* secondary text */
   --color-ink-3: #6B6A64;           /* tertiary text, placeholders, meta */
+  --select-chevron: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 256 256' fill='%236B6A64'%3E%3Cpath d='M213.66,101.66l-80,80a8,8,0,0,1-11.32,0l-80-80A8,8,0,0,1,53.66,90.34L128,164.69l74.34-74.35a8,8,0,0,1,11.32,11.32Z'/%3E%3C/svg%3E");  /* Phosphor caret-down in ink-3 */
   --color-ink-disabled: #A5A39C;    /* disabled labels only */
   --color-on-primary: #FFFFFF;
   --color-primary-hover: #3A3936;
@@ -122,6 +123,7 @@
   --color-ink: #ECEBE7;
   --color-ink-2: #A9A7A1;
   --color-ink-3: #8E8C86;
+  --select-chevron: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 256 256' fill='%238E8C86'%3E%3Cpath d='M213.66,101.66l-80,80a8,8,0,0,1-11.32,0l-80-80A8,8,0,0,1,53.66,90.34L128,164.69l74.34-74.35a8,8,0,0,1,11.32,11.32Z'/%3E%3C/svg%3E");  /* Phosphor caret-down in ink-3 */
   --color-ink-disabled: #5E5D58;
   --color-on-primary: #191918;
   --color-primary-hover: #D6D5D0;

@@ -1,4 +1,4 @@
-import type { ButtonHTMLAttributes, ReactNode } from 'react'
+import type { ButtonHTMLAttributes, ReactNode, Ref } from 'react'
 
 import { Icon, type IconName } from './Icon'
 
@@ -52,7 +52,8 @@ export function Kbd({ children, label }: { children: ReactNode; label?: string }
 
 /**
  * The app's button. Defaults to type="button" so it never submits a form by
- * accident; pass type="submit" for the form's primary action.
+ * accident; pass type="submit" for the form's primary action. `ref` reaches
+ * the DOM button (React 19 passes it as a prop) so callers can focus it.
  */
 export function Button({
   variant,
@@ -68,6 +69,7 @@ export function Button({
   children,
   type = 'button',
   disabled,
+  ref,
   ...rest
 }: ButtonLookProps &
   Omit<ButtonHTMLAttributes<HTMLButtonElement>, 'children'> & {
@@ -80,9 +82,11 @@ export function Button({
     /** Shows a small spinner and disables the button. */
     busy?: boolean
     children?: ReactNode
+    ref?: Ref<HTMLButtonElement>
   }) {
   return (
     <button
+      ref={ref}
       type={type}
       className={buttonClass({ variant, size, block, iconOnly }, className)}
       disabled={disabled || busy}

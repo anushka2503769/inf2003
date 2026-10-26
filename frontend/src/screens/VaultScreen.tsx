@@ -243,9 +243,9 @@ export function VaultScreen({ client = trackerClient }: VaultScreenProps) {
 
   return (
     <section className="vault" aria-labelledby="vault-title">
-      <header className="vault__head">
-        <h1 id="vault-title" className="t-title vault__title-page">Vault</h1>
-        <p className="t-body muted vault__lede">Every posting you decided on, sorted by most recently updated.</p>
+      <header className="page-head">
+        <h1 id="vault-title" className="page-head__title">Vault</h1>
+        <p className="page-head__lede">Every posting you decided on, sorted by most recently updated.</p>
       </header>
 
       {/* Mobile: one labelled dropdown replaces the six tabs. Exactly one of the two is exposed. */}
@@ -362,7 +362,7 @@ export function VaultScreen({ client = trackerClient }: VaultScreenProps) {
                           <p className="row__sub">It can show up in Discover again. Your status ({STATUS_LABELS[row.status]}) is not kept.</p>
                         </div>
                         <div className="row__actions vault__confirm-actions">
-                          <button className={buttonClass({ variant: 'ghost' })} disabled={pendingJobId !== null} onClick={() => setConfirmingId(null)} ref={cancelButton} type="button">Cancel</button>
+                          <Button variant="ghost" disabled={pendingJobId !== null} onClick={() => setConfirmingId(null)} ref={cancelButton}>Cancel</Button>
                           <Button variant="danger" icon="trash" disabled={pendingJobId !== null} onClick={() => void removeRow(row)}>Remove</Button>
                         </div>
                       </div>

@@ -16,27 +16,6 @@
   gap: var(--space-5);
 }
 
-/* ------------------------------------------------------------------ page head */
-.skill-gap__head {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-2);
-}
-
-.skill-gap__title {
-  font-family: var(--font-serif);
-  font-weight: var(--weight-regular);
-  font-size: var(--text-3xl);
-  line-height: var(--leading-3xl);
-  letter-spacing: var(--tracking-tight);
-}
-
-.skill-gap__lede {
-  font-size: var(--text-lg);
-  line-height: var(--leading-lg);
-  color: var(--color-ink-2);
-}
-
 /* ------------------------------------------------------------------ role picker */
 .skill-gap__role {
   max-width: 26.25rem;
@@ -236,16 +215,6 @@
 @media (max-width: 767.98px) {
   .skill-gap {
     gap: var(--space-4);
-  }
-
-  .skill-gap__title {
-    font-size: var(--text-2xl);
-    line-height: var(--leading-2xl);
-    letter-spacing: -0.01em;
-  }
-
-  .skill-gap__lede {
-    display: none;
   }
 
   .skill-gap__role {
