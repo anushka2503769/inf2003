@@ -111,7 +111,7 @@ task/PR, integration checks and next milestone notes here without duplicating ev
 
 ### WP-11 progress note (2026-10-26)
 
-- Branch: `docs/wp11-user-manual`. commit: (filled in by orchestrator)
+- Branch: `docs/wp11-user-manual`. commit: f556065
 - Added `docs/USER_MANUAL.md` (setup from a fresh laptop: Supabase 001-003, Google provider,
   Atlas, env files, run, ingestion CLI, walkthrough, tests, troubleshooting). Linked from
   `docs/README.md`; there is no top-level `README.md`. Fixed `docs/README.md` (Python is 3.12
