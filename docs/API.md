@@ -93,7 +93,9 @@ ResumeResponse = {
 
 `suggested_skills`: extracted skill names mapped to dictionary entries
 (case-insensitive exact name), excluding skills the caller has already confirmed, ordered
-by name. Names that are not in the dictionary are dropped. Suggestions are never saved
+by name. Names that are not in the dictionary are dropped. `suggested_skills` is computed only
+by `POST /api/resumes/upload` and `GET /api/me/resume`; every other resume read returns `[]`.
+If the SQL lookup fails, the upload answers 503 `service_unavailable` and stores nothing. Suggestions are never saved
 automatically; the client confirms them with `PUT /api/me/skills/{id}`.
 
 ## 6. Tracker *(WP-2, implemented)*

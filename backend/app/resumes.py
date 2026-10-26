@@ -1,4 +1,3 @@
-import logging
 from datetime import datetime, timezone
 from uuid import UUID
 
@@ -18,8 +17,6 @@ from .schemas import ExtractedData, ResumeUploadResponse, Skill
 from .skills_repository import SkillsRepositoryError, get_all_skills
 from .sql_access import SqlAccessError, SqlParentMissing, ensure_sql_user_exists
 from .sql_skills import confirmed_skills
-
-logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/resumes", tags=["resumes"])
 
@@ -98,6 +95,9 @@ async def upload_resume(
         extracted_data = extract_structured_fields(raw_text)
     except SkillsRepositoryError as exc:
         raise ApiError(503, "service_unavailable", "SQL skills dictionary is unavailable.") from exc
+    # Suggestions come from SQL, so compute them before touching MongoDB: if SQL
+    # is down the upload fails as a whole and the previous resume stays in place.
+    suggested = suggest_skills(extracted_data.get("skills", []), user.user_id)
     uploaded_at = datetime.now(timezone.utc)
 
     document = {
@@ -113,14 +113,6 @@ async def upload_resume(
     except WriteError as exc:
         # Fires if the document doesn't match the collection's validator
         raise HTTPException(status_code=422, detail="Resume document failed validation.") from exc
-
-    # The resume is already stored, so a suggestion lookup failure must not
-    # report the upload as failed; the client can fetch GET /api/me/resume later.
-    try:
-        suggested = suggest_skills(stored["extracted_data"].get("skills", []), user.user_id)
-    except (ApiError, SqlAccessError):
-        logger.warning("Resume stored but suggested skills were unavailable.")
-        suggested = []
 
     return ResumeUploadResponse(
         resume_id=str(stored["_id"]),

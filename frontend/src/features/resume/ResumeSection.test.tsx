@@ -189,6 +189,38 @@ describe('replace resume', () => {
   })
 })
 
+describe('overlapping requests', () => {
+  it('disables Add selected, per-skill Retry and load Retry while an upload runs', async () => {
+    let finish: (value: ResumeResponse) => void = () => {}
+    const upload = vi.fn(() => new Promise<ResumeResponse>(resolve => { finish = resolve }))
+    const add = vi.fn(async (id: number) => {
+      if (id === 2) throw { status: 503, code: 'service_unavailable', message: 'busy' }
+    })
+    mount(resumeClient({ current: vi.fn(async () => resume()), upload }), skillsClient({ add }))
+    await screen.findByText('Skills found in your resume')
+    fireEvent.click(screen.getByRole('button', { name: 'Add selected (3)' }))
+    await screen.findByRole('button', { name: 'Retry adding SQL' })
+
+    pickFile(pdf())
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Retry adding SQL' })).toBeDisabled())
+    expect(screen.getByRole('button', { name: /Add selected/ })).toBeDisabled()
+    finish(resume({ file_name: 'new.pdf' }))
+    expect(await screen.findByText('new.pdf')).toBeInTheDocument()
+  })
+
+  it('ignores a stale load that finishes after a newer upload', async () => {
+    let settleLoad: (value: ResumeResponse | null) => void = () => {}
+    const current = vi.fn(() => new Promise<ResumeResponse | null>(resolve => { settleLoad = resolve }))
+    mount(resumeClient({ current, upload: vi.fn(async () => resume({ file_name: 'fresh.pdf' })) }), skillsClient())
+    pickFile(pdf())
+    expect(await screen.findByText('fresh.pdf')).toBeInTheDocument()
+    settleLoad(null) // the older, slower GET answers last
+    await new Promise(resolve => setTimeout(resolve, 20))
+    expect(screen.getByText('fresh.pdf')).toBeInTheDocument()
+    expect(screen.queryByText(/No resume yet/)).not.toBeInTheDocument()
+  })
+})
+
 describe('skill editor', () => {
   it('is mounted in the section with the supplied skills client', async () => {
     const skills = skillsClient()

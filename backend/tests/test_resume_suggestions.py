@@ -257,7 +257,7 @@ def test_get_my_resume_requires_authentication() -> None:
     assert _call("GET", "/api/me/resume").status_code in (401, 403)
 
 
-def test_upload_stays_200_when_suggestions_fail_after_the_store(
+def test_upload_is_503_and_stores_nothing_when_suggestions_fail(
     world: World, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     def broken(user_id: UUID) -> list[Skill]:
@@ -265,9 +265,11 @@ def test_upload_stays_200_when_suggestions_fail_after_the_store(
 
     monkeypatch.setattr(resumes, "confirmed_skills", broken)
     response = _upload()
-    assert response.status_code == 200
-    assert response.json()["suggested_skills"] == []
-    assert len(world.stored) == 1
+    assert response.status_code == 503
+    assert response.json()["error"]["code"] == "service_unavailable"
+    # The previous resume is untouched: the store was never called.
+    assert "store" not in world.events
+    assert world.stored == []
 
 
 def test_get_my_resume_503_uses_service_unavailable_code(

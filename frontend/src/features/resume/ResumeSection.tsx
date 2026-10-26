@@ -50,21 +50,35 @@ export function ResumeSection({
   const [adding, setAdding] = useState(false)
   const [reloadError, setReloadError] = useState(false)
   const fileInput = useRef<HTMLInputElement>(null)
+  // Only the most recent load or upload may write the resume; older responses are dropped.
+  const generation = useRef(0)
+  const uploadingRef = useRef(false)
+  const loadStateRef = useRef<'loading' | 'ready' | 'error'>('loading')
 
   const confirmedIds = new Set(confirmedSkills.map(skill => skill.skill_id))
   const suggestions = resume?.suggested_skills ?? []
 
+  const updateLoadState = useCallback((state: 'loading' | 'ready' | 'error') => {
+    loadStateRef.current = state
+    setLoadState(state)
+  }, [])
+
   const loadCurrent = useCallback(async () => {
-    setLoadState('loading')
+    if (uploadingRef.current) return
+    const mine = ++generation.current
+    updateLoadState('loading')
     setLoadError(null)
     try {
-      setResume(await client.current())
-      setLoadState('ready')
+      const current = await client.current()
+      if (mine !== generation.current) return
+      setResume(current)
+      updateLoadState('ready')
     } catch (cause) {
-      setLoadState('error')
+      if (mine !== generation.current) return
+      updateLoadState('error')
       setLoadError(isResumeClientError(cause) ? cause.message : 'Your resume did not load.')
     }
-  }, [client])
+  }, [client, updateLoadState])
 
   useEffect(() => {
     void loadCurrent()
@@ -81,17 +95,27 @@ export function ResumeSection({
       return
     }
 
+    if (uploadingRef.current || adding) return
+    const mine = ++generation.current // drops any load still in flight
+    const stateBefore = loadStateRef.current
     setUploadError(null)
+    uploadingRef.current = true
     setUploading(true)
+    updateLoadState('ready')
     try {
       const uploaded = await client.upload(file)
-      setResume(uploaded)
-      setLoadState('ready')
-      setUnticked(new Set())
-      setRows({})
+      if (mine === generation.current) {
+        setResume(uploaded)
+        setUnticked(new Set())
+        setRows({})
+      }
     } catch (cause) {
       setUploadError(isResumeClientError(cause) ? cause.message : 'The upload did not work. Try again.')
+      uploadingRef.current = false
+      // The load we cancelled never reported; ask again so "No resume yet" is not a guess.
+      if (stateBefore !== 'ready') void loadCurrent()
     } finally {
+      uploadingRef.current = false
       setUploading(false)
     }
   }
@@ -106,6 +130,7 @@ export function ResumeSection({
   }
 
   async function confirm(skillIds: number[]) {
+    if (uploadingRef.current) return
     setAdding(true)
     setReloadError(false)
     // One request at a time, so a failure is attributed to the right skill.
@@ -144,7 +169,7 @@ export function ResumeSection({
               <Spinner size="sm" /> Checking for your resume…
             </span>
           ) : loadState === 'error' ? (
-            <InlineError actionLabel="Retry" onAction={() => void loadCurrent()}>
+            <InlineError actionLabel={uploading ? undefined : 'Retry'} onAction={() => void loadCurrent()}>
               {loadError}
             </InlineError>
           ) : resume ? (
@@ -218,7 +243,7 @@ export function ResumeSection({
                           <Badge tone="danger" icon="warning-circle">Not saved</Badge>
                           <Button
                             variant="ghost"
-                            disabled={adding}
+                            disabled={adding || uploading}
                             aria-label={`Retry adding ${skill.name}`}
                             onClick={() => void confirm([skill.skill_id])}
                           >
@@ -235,7 +260,7 @@ export function ResumeSection({
                   <Button
                     variant="primary"
                     busy={adding}
-                    disabled={pending.length === 0}
+                    disabled={pending.length === 0 || uploading}
                     onClick={() => void confirm(pending.map(skill => skill.skill_id))}
                   >
                     {adding ? 'Adding…' : `Add selected (${pending.length})`}
