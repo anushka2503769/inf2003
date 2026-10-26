@@ -502,17 +502,17 @@ export function DiscoverFeed({ client = discoverClient, onProfileMissing }: {
 
   return (
     <div className="discover" role="region" aria-label="Discover jobs">
-      <header className="discover__head">
+      <header className="page-head discover__head">
         <div className="discover__head-row">
-          <h1 className="t-title">Discover</h1>
+          <h1 className="page-head__title">Discover</h1>
           {meta && <span className="t-meta mono">{meta.long}</span>}
         </div>
-        <p className="t-body muted">Postings ranked by how many of their required skills you already have.</p>
+        <p className="page-head__lede">Postings ranked by how many of their required skills you already have.</p>
       </header>
       <div className="discover__bar">
-        <button ref={filtersButtonRef} type="button" className={buttonClass({ size: 'lg' })} aria-haspopup="dialog" aria-expanded={sheetOpen} aria-controls={sheetId} onClick={() => setSheetOpen(true)}>
-          <Icon name="sliders-horizontal" />Filters
-        </button>
+        <Button ref={filtersButtonRef} size="lg" icon="sliders-horizontal" aria-haspopup="dialog" aria-expanded={sheetOpen} aria-controls={sheetId} onClick={() => setSheetOpen(true)}>
+          Filters
+        </Button>
         {meta && <span className="t-meta mono">{meta.short}</span>}
       </div>
       {sheetOpen && <div className="discover-scrim" aria-hidden="true" onClick={closeSheet} />}

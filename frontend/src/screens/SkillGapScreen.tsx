@@ -125,9 +125,9 @@ export function SkillGapScreen({ client = skillGapClient }: { client?: SkillGapC
   const onboardingLink = <Link className={buttonClass({ variant: 'primary' })} to={routes.welcome}>Start onboarding</Link>
 
   return <div className="skill-gap">
-    <header className="skill-gap__head">
-      <h1 className="skill-gap__title">Skill Gap</h1>
-      <p className="skill-gap__lede">What employers in one field ask for, and which of those skills you have not added yet.</p>
+    <header className="page-head">
+      <h1 className="page-head__title">Skill Gap</h1>
+      <p className="page-head__lede">What employers in one field ask for, and which of those skills you have not added yet.</p>
     </header>
 
     {rolesLoading ? <p className="toast-line t-meta" role="status"><Spinner size="sm" />Loading roles…</p>

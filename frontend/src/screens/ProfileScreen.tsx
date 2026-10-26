@@ -15,9 +15,9 @@ export function ProfileScreen() {
 
   return (
     <div className="profile">
-      <header className="profile__head">
-        <h1 className="profile__title">Profile</h1>
-        <p className="profile__lede">Your name and account. Your resume and skills will live here too.</p>
+      <header className="page-head">
+        <h1 className="page-head__title">Profile</h1>
+        <p className="page-head__lede">Your name and account. Your resume and skills will live here too.</p>
       </header>
 
       <NameEditor />
