@@ -159,7 +159,9 @@ database objects only; no table or column changes, so the ER diagram above stays
   row whose job was deactivated later still works as an update.
 - **`v_job_requirement_counts(job_id, required_total, preferred_total)`** counts each active
   job's `REQUIRED` and `PREFERRED` rows in `job_skills` using `COUNT(*) FILTER`. Inactive
-  jobs, and jobs with no skill rows, do not appear. Discover ranking uses it.
+  jobs, and jobs with no skill rows, do not appear. No app route reads it: Discover needs
+  per-user matched counts, so it aggregates `job_skills` itself. It is there for report and
+  analytics queries.
 - **`v_user_tracker_summary(user_id, status, job_count)`** counts a user's `user_jobs` rows
   per status. Statuses with no rows do not appear.
 - **Indexes.** `jobs_active_type_arrangement_idx` on `jobs (job_type, work_arrangement)` and
@@ -169,3 +171,34 @@ database objects only; no table or column changes, so the ER diagram above stays
   summary view.
 - **Access.** Both views follow 001's model: all privileges revoked from
   `PUBLIC`/`anon`/`authenticated`, `SELECT` granted to `service_role`.
+
+### Design notes from the 2026-10-26 review
+
+Three findings from the overnight build, each with the test that pins it. They are worth
+quoting in the final report's integrity-constraint discussion.
+
+1. **A BEFORE INSERT trigger runs before ON CONFLICT.** The first version of
+   `user_jobs_requires_active_job` rejected every insert for an inactive job. The tracker's
+   `INSERT ... ON CONFLICT (user_id, job_id) DO UPDATE` is an insert attempt, and PostgreSQL
+   fires BEFORE INSERT row triggers before it detects the conflict. So a student who had
+   saved a job that was later deactivated could not move it from SAVED to APPLIED. The
+   trigger now lets the insert through when the `(user_id, job_id)` row already exists, so
+   only genuinely new rows are guarded. A concurrent DELETE plus upsert can still slip past
+   (noted in the SQL comment). Tests in `backend/tests/test_sql_003.py`:
+   `test_upsert_existing_row_of_deactivated_job_changes_status`,
+   `test_upsert_same_status_on_deactivated_job_keeps_updated_at` and
+   `test_upsert_new_row_for_inactive_job_is_check_violation`.
+2. **One rule, two engines: REQUIRED beats PREFERRED.** When a job lists the same skill
+   twice, PRD §4 says REQUIRED wins. MongoDB's skill-gap pipeline applies it with
+   `$group` by `{job_id, skill_id}` and `$max` of `(type == REQUIRED ? 1 : 0)`. SQL's
+   `_replace_job_skills` applies it with
+   `ON CONFLICT ... SET requirement_type = CASE WHEN job_skills.requirement_type = 'REQUIRED'
+   THEN 'REQUIRED' ELSE EXCLUDED.requirement_type END`. The SQL side was last-wins until the
+   review. `test_engines_agree_when_links_come_from_production_sync`
+   (`backend/tests/test_skill_gap_db.py`) writes links the production way and checks that both
+   engines report the same required count.
+3. **A read path should depend only on the store it reads.** Discover reads PostgreSQL only,
+   but its first version used a dependency that also opened MongoDB, so it returned 503
+   whenever MongoDB was unset or down. It now takes auth and the shared job lock without
+   MongoDB. `test_real_lock_reaches_the_store_without_mongo` and `test_real_lock_busy_is_503`
+   (`backend/tests/test_discover.py`).
