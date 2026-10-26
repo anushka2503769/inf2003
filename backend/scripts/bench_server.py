@@ -18,7 +18,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import uvicorn  # noqa: E402
-from seed_synthetic import assert_local_urls, assert_no_routing_env  # noqa: E402
+from seed_synthetic import assert_local_urls, assert_no_routing_env, redact_secrets  # noqa: E402
 
 from app.errors import ApiError  # noqa: E402
 from app.main import app  # noqa: E402
@@ -26,21 +26,26 @@ from app.routers import discover  # noqa: E402
 
 
 def exception_chain(exc: BaseException) -> list[str]:
-    """'Type pgcode=XXXXX: first line' for the exception and each __cause__/__context__."""
+    """'Type pgcode=XXXXX: message' per exception in the cause chain.
+
+    Only the exception type, SQLSTATE and the first message line are kept, with URL
+    credentials and password=... values redacted and the length capped.
+    """
     chain, seen = [], set()
     while exc is not None and id(exc) not in seen:
         seen.add(id(exc))
-        text = (str(exc).strip().splitlines() or [""])[0][:200]
+        first_line = (str(exc).strip().splitlines() or [""])[0]
         code = getattr(exc, "pgcode", None)
-        chain.append(f"{type(exc).__name__}{f' pgcode={code}' if code else ''}: {text}")
+        chain.append(
+            f"{type(exc).__name__}{f' pgcode={code}' if code else ''}: {redact_secrets(first_line)}"
+        )
         exc = exc.__cause__ or exc.__context__
     return chain
 
 
 def log_server_errors(path: str) -> None:
-    """Append one JSON line per 5xx ApiError with its cause chain (no URLs or secrets: only
-    exception types, SQLSTATE codes and the first message line, which libpq words as
-    'connection to server at "127.0.0.1", port N failed: ...')."""
+    """Append one JSON line per 5xx ApiError with its cause chain (exception types, SQLSTATE
+    codes and a redacted, length-capped first message line; see exception_chain)."""
     original = app.exception_handlers[ApiError]
 
     async def handler(request, exc):

@@ -20,6 +20,7 @@ by the supplementary tracker-index variant.
 import argparse
 import os
 import random
+import re
 import sys
 import uuid
 from collections.abc import Mapping, Sequence
@@ -140,6 +141,17 @@ def assert_local_urls(database_url: str, mongodb_uri: str) -> None:
     assert_local_mongo_uri(mongodb_uri)
 
 
+_URL_CREDENTIALS = re.compile(r"([a-zA-Z][a-zA-Z0-9+.-]*://)[^\s/@]*@")
+_PASSWORD_PARAM = re.compile(r"(?i)\b(password|passwd|pwd)\s*=\s*('[^']*'|\"[^\"]*\"|\S+)")
+
+
+def redact_secrets(text: str, limit: int = 200) -> str:
+    """Strip URL credentials (scheme://user:pass@) and password=... values; cap the length."""
+    text = _URL_CREDENTIALS.sub(r"\1***@", text)
+    text = _PASSWORD_PARAM.sub(r"\1=***", text)
+    return text[:limit]
+
+
 def weighted_choice(rng: random.Random, options: Sequence[tuple[str, int]]) -> str:
     return rng.choices([v for v, _ in options], weights=[w for _, w in options], k=1)[0]
 
@@ -248,18 +260,35 @@ def build_dataset(
     }
 
 
-def connect_with_retry(database_url: str, attempts: int = 15, pause: float = 4.0):
-    """psycopg2.connect, retried: right after heavy connection churn Docker Desktop's port
-    proxy can briefly drop new connections to the container."""
+# SQLSTATE class 28 (invalid authorization) and 3D000 (unknown database) never fix themselves.
+_PERMANENT_SQLSTATES = ("28", "3D")
+
+
+def is_permanent_connect_error(exc: BaseException) -> bool:
+    """True for authentication/authorization style failures that must not be retried."""
+    code = getattr(exc, "pgcode", None) or ""
+    if code.startswith(_PERMANENT_SQLSTATES):
+        return True
+    text = str(exc).lower()
+    return "password authentication failed" in text or "authentication failed" in text
+
+
+def connect_with_retry(database_url: str, attempts: int = 15, pause: float = 4.0, connect=None):
+    """psycopg2.connect, retried only for refused/closed-style failures.
+
+    Right after heavy connection churn Docker Desktop's port proxy can briefly drop new
+    connections. Authentication and unknown-database errors fail immediately.
+    """
     import time
 
     import psycopg2
 
+    connect = connect or psycopg2.connect
     for attempt in range(attempts):
         try:
-            return psycopg2.connect(database_url)
-        except psycopg2.OperationalError:
-            if attempt == attempts - 1:
+            return connect(database_url)
+        except psycopg2.OperationalError as exc:
+            if is_permanent_connect_error(exc) or attempt == attempts - 1:
                 raise
             time.sleep(pause)
 

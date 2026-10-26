@@ -174,3 +174,108 @@ def test_index_ddl_is_taken_from_migration_003():
     assert "(user_id, status)" in ddl["user_jobs_user_status_idx"]
     with pytest.raises(RuntimeError):
         benchmark.extract_sql_index_ddl(text, ["no_such_index"])
+
+
+@pytest.mark.parametrize(
+    "raw, secret",
+    [
+        ("could not connect to postgresql://app:s3cr3t@127.0.0.1:5432/db", "s3cr3t"),
+        ("DSN host=127.0.0.1 password=hunter2 dbname=x", "hunter2"),
+        ("password='two words' user=x", "two words"),
+        ("mongodb://root:p%40ss@127.0.0.1:27017/", "p%40ss"),
+    ],
+)
+def test_redact_secrets_removes_credentials(raw, secret):
+    cleaned = seed_synthetic.redact_secrets(raw)
+    assert secret not in cleaned
+    assert "***" in cleaned
+
+
+def test_redact_secrets_caps_length_and_keeps_plain_text():
+    assert seed_synthetic.redact_secrets("a" * 500) == "a" * 200
+    plain = 'connection to server at "127.0.0.1", port 5432 failed'
+    assert seed_synthetic.redact_secrets(plain) == plain
+
+
+def test_server_exception_chain_is_redacted():
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
+    import bench_server
+
+    try:
+        try:
+            raise RuntimeError("dsn postgresql://u:topsecret@127.0.0.1/db failed")
+        except RuntimeError as inner:
+            raise ValueError("outer password=topsecret") from inner
+    except ValueError as exc:
+        chain = bench_server.exception_chain(exc)
+    assert len(chain) == 2
+    assert not any("topsecret" in line for line in chain)
+    assert chain[0].startswith("ValueError")
+
+
+def _operational(message, pgcode=None):
+    import psycopg2
+
+    exc = psycopg2.OperationalError(message)
+    if pgcode:
+        # pgcode is read-only on real errors; a subclass stands in for one carrying a SQLSTATE
+        class WithCode(psycopg2.OperationalError):
+            pass
+
+        exc = WithCode(message)
+        exc.__dict__["pgcode"] = pgcode
+    return exc
+
+
+def test_connect_retry_gives_up_immediately_on_authentication_failure(monkeypatch):
+    calls = []
+
+    def connect(_url):
+        calls.append(1)
+        raise _operational('FATAL: password authentication failed for user "x"')
+
+    monkeypatch.setattr("time.sleep", lambda _s: None)
+    with pytest.raises(Exception, match="authentication failed"):
+        seed_synthetic.connect_with_retry(GOOD_PG, attempts=5, connect=connect)
+    assert len(calls) == 1
+
+
+def test_connect_retry_retries_closed_connections_then_succeeds(monkeypatch):
+    calls = []
+
+    def connect(_url):
+        calls.append(1)
+        if len(calls) < 3:
+            raise _operational("server closed the connection unexpectedly")
+        return "connection"
+
+    monkeypatch.setattr("time.sleep", lambda _s: None)
+    assert seed_synthetic.connect_with_retry(GOOD_PG, attempts=5, connect=connect) == "connection"
+    assert len(calls) == 3
+
+
+def test_connect_retry_reraises_after_all_attempts(monkeypatch):
+    calls = []
+
+    def connect(_url):
+        calls.append(1)
+        raise _operational("connection refused")
+
+    monkeypatch.setattr("time.sleep", lambda _s: None)
+    with pytest.raises(Exception, match="refused"):
+        seed_synthetic.connect_with_retry(GOOD_PG, attempts=3, connect=connect)
+    assert len(calls) == 3
+
+
+def test_host_sampler_withholds_maximum_when_sampling_failed():
+    sampler = benchmark.HostSampler(GOOD_PG)
+    sampler.attempted, sampler.succeeded = 1, 0
+    sampler.error = "OperationalError"
+    report = sampler.report(30)
+    assert report["max_pg_sessions"] is None
+    assert "stopped: OperationalError" in report["sampling"]
+
+    sampler.max_sessions, sampler.max_connections, sampler.succeeded = 21, 100, 29
+    assert sampler.report(30)["max_pg_sessions"] == 21
+    sampler.succeeded = 10  # under half the phase covered
+    assert sampler.report(30)["max_pg_sessions"] is None

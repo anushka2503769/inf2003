@@ -110,41 +110,46 @@ These are readings of `results-2026-10-26.md`; re-run before quoting new numbers
   connection per call (no pool), so the lock path makes twice as many connection set-ups. The
   benchmark has no concurrent writer, so it measures the lock's overhead, not its benefit
   (blocking readers while an admin refresh rewrites jobs); say so in the report.
-- **Finding: the HTTP 503 responses seen in some with-lock phases are a connection-path
-  artefact, not an application defect.** Evidence, from the diagnostics the benchmark now
-  records:
-  - The server-side cause chain of every 503 was `ApiError <- SqlAccessError("SQL job
-    synchronization is unavailable") <- psycopg2.OperationalError: connection to server at
-    "127.0.0.1", port N failed: server closed the connection unexpectedly`: the lock's own
-    connection attempt failed. It was not a lock timeout (that is SQLSTATE 55P03 and would be
-    "busy"), not `too many clients` (PostgreSQL never saw more than 21 sessions against
-    `max_connections` 100), and PostgreSQL's own log (inspected with `BENCH_DOCKER_LOGS=1`)
-    recorded no rejected connection.
-  - The failures come in bursts at the start of a phase (the first 1-3 s) and never in the
-    no-lock phases of the same runs, which open one connection per request.
-  - The control experiment (a table in the results file) reproduces them with **no
-    application code at all**: 10 threads opening raw `psycopg2` connections in a loop. In the
-    committed run the nested pattern (hold one connection while opening a second, as the lock
-    does) failed on about 96% and 63% of connection attempts in its two phases; the one-connection
-    pattern failed on about 33% of attempts, all in the last 3.5 s of the phase. A separate
-    5-worker control failed in the same way, so it is not specific to 10 workers. The
-    sampler that counts PostgreSQL sessions also failed to connect during these windows.
-  - Conclusion: Docker Desktop's published-port path (or, if you run this inside a sandboxed
-    session, that sandbox) intermittently drops new connections under rapid connection churn.
-    I could not run outside the sandboxed session used for the committed run, so I could not tell
-    those two apart; re-running on an unsandboxed machine would settle it. The host-side TIME_WAIT
-    count was not measurable in that session (`netstat` is blocked), so the earlier suggestion of
-    ephemeral-port exhaustion is **not supported** by evidence and is withdrawn.
-  - What the benchmark does about it: a phase with more than 1% failed requests is discarded and
-    repeated (up to 3 attempts, cooldown between), and the table lists every attempt's failure
-    count. In the committed run the first with-lock attempt failed 2,346 requests and was
-    discarded; the reported phase is clean.
-  - Application-side implication, worth one sentence in the report: because every request
-    opens one to two brand-new PostgreSQL connections, the API is sensitive to connection-setup
-    failures and pays their cost on every call. A small connection pool (for example
-    `psycopg2.pool.ThreadedConnectionPool`) would remove most of the connection churn, and the
-    lock connection could reuse the request's own connection. That change belongs in
-    `backend/app/` and is deliberately not made here.
+- **Finding (unresolved): HTTP 503 responses and failed connections in some with-lock
+  phases.** What was observed in the run used for the committed numbers (a sandboxed
+  session, not the team's own machine):
+  - Some with-lock phases returned HTTP 503 `service_unavailable` ("Job synchronization is
+    temporarily unavailable"). The server-side cause chain was `ApiError <- SqlAccessError("SQL
+    job synchronization is unavailable") <- psycopg2.OperationalError: connection to server at
+    "127.0.0.1", port N failed: server closed the connection unexpectedly`; that is, opening
+    the lock's PostgreSQL connection failed. It was not reported as a lock timeout (SQLSTATE
+    55P03).
+  - The failures came in bursts, in the first seconds of a phase in the diagnostic runs, and
+    did not occur in the no-lock phases of those runs (which open one connection per request).
+  - The benchmark samples `pg_stat_activity` once a second over a separate connection. Where
+    sampling worked, the peak was 21 sessions against `max_connections` 100; the sampler itself
+    sometimes failed to connect during the failure windows, so it cannot rule out brief
+    saturation. The results file now prints the sampling coverage and shows "not measured" when
+    fewer than half the expected samples were obtained. PostgreSQL's container log showed no
+    rejected connection in the run where it was inspected (`BENCH_DOCKER_LOGS=1`).
+  - A control with no application code (raw `psycopg2` threads opening connections in a loop,
+    nested pairs mimicking the lock path versus single connections) reproduced a similar
+    pattern of `server closed the connection unexpectedly`, including at 5 workers.
+  - **The cause is not established.** Possible contributors: the sandboxed session and/or Docker
+    Desktop's published-port path dropping new connections under rapid connection churn, and
+    the application's own connection churn (every request opens a fresh PostgreSQL connection,
+    and the lock path opens a second one). The control shows the symptom is reachable without
+    the app; it does not show the app is irrelevant. Host-side TIME_WAIT could not be measured
+    in that session (`netstat` was blocked), so an earlier guess about ephemeral-port exhaustion
+    has no supporting evidence.
+  - **Every phase runs once and is reported as measured**, in order (lock, no lock, lock
+    again), with failures listed beside the successes. Requests/s counts successful requests
+    only, so a phase with failures understates the load that was offered. Nothing is retried or
+    discarded. A harness error (for example the server not starting) aborts the run; zero
+    successful requests is reported as a result.
+  - The numbers in the committed results file come from that sandboxed run. The official
+    numbers for the report should come from an unsandboxed run by the team on their own machine
+    (`bash backend/scripts/run_benchmark.sh`), and this section should then be updated to what
+    that run shows.
+  - A possible application improvement, independent of the cause: a small connection pool
+    (for example `psycopg2.pool.ThreadedConnectionPool`) would remove most per-request
+    connection set-up, and the lock could reuse the request's own connection. That change
+    belongs in `backend/app/` and is deliberately not made here.
 
 ## Limitations
 

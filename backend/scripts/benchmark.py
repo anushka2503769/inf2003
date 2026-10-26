@@ -54,10 +54,6 @@ from seed_synthetic import (  # noqa: E402
 WARMUPS = 3
 RUNS = 30
 TIME_WAIT_PAUSE_SECONDS = 45
-# A phase with more than this share of failed requests is discarded and repeated (up to
-# MAX_PHASE_ATTEMPTS times); every attempt's failure count is reported.
-CLEAN_FAILURE_SHARE = 0.01
-MAX_PHASE_ATTEMPTS = 3
 THROUGHPUT_SECONDS = 30
 THROUGHPUT_WORKERS = 10
 HEAVY_TRACKER_ROWS = 2_000
@@ -133,7 +129,9 @@ def md_table(headers: Sequence[str], rows: Sequence[Sequence[Any]]) -> str:
     return "\n".join(lines)
 
 
-def fmt(ms: float) -> str:
+def fmt(ms: float | None) -> str:
+    if ms is None:
+        return "n/a"
     return f"{ms:.2f}" if ms < 100 else f"{ms:.0f}"
 
 
@@ -596,76 +594,59 @@ def run_throughput(
             # Let the first run's TIME_WAIT sockets drain so the second run does not
             # start close to local ephemeral-port exhaustion.
             time.sleep(TIME_WAIT_PAUSE_SECONDS)
-        attempts: list[dict[str, Any]] = []
-        for attempt in range(MAX_PHASE_ATTEMPTS):
-            if attempt:
-                time.sleep(TIME_WAIT_PAUSE_SECONDS)
-            token = secrets.token_hex(16)
-            error_log = Path(tempfile.mkdtemp(prefix="bench-")) / f"server-errors-{position}.jsonl"
-            port = free_local_port()
-            env = {
-                "PATH": os.environ.get("PATH", ""),
-                "HOME": os.environ.get("HOME", ""),
-                "DATABASE_URL": database_url,
-                "MONGODB_URI": mongodb_uri,
-                "MONGODB_DATABASE": mongodb_database,
-                "APP_ENV": "development",
-                "AUTH_ALLOW_UNVERIFIED_TOKENS": "true",
-                "BENCH_NO_READ_LOCK": no_lock,
-                "BENCH_TOKEN": token,
-                "BENCH_ERROR_LOG": str(error_log),
-            }
-            server = subprocess.Popen(
-                [
-                    sys.executable,
-                    str(Path(__file__).with_name("bench_server.py")),
-                    "--port",
-                    str(port),
-                ],
-                env=env,
-                cwd=BACKEND_DIR,
-                stdout=subprocess.DEVNULL,
-                stderr=subprocess.DEVNULL,
-            )
-            try:
-                base = f"http://127.0.0.1:{port}"
-                expected = {"token": token, "no_read_lock": no_lock == "1"}
-                for _ in range(60):
-                    if server.poll() is not None:
-                        raise RuntimeError(
-                            f"The benchmark server exited with status {server.poll()}."
-                        )
-                    try:
-                        reply = httpx.get(f"{base}/__bench/identity", timeout=2)
-                        if reply.status_code == 200:
-                            if reply.json() != expected:
-                                raise RuntimeError(
-                                    "Another server answered; refusing to measure it."
-                                )
-                            break
-                    except httpx.HTTPError:
-                        time.sleep(0.5)
-                else:
-                    raise RuntimeError("The benchmark server did not start.")
-                result = _drive(base, label, user_ids, database_url)
-                result["server_errors"] = summarize_server_log(error_log)
-                attempts.append(result)
-            finally:
-                server.terminate()
+        token = secrets.token_hex(16)
+        error_log = Path(tempfile.mkdtemp(prefix="bench-")) / f"server-errors-{position}.jsonl"
+        port = free_local_port()
+        env = {
+            "PATH": os.environ.get("PATH", ""),
+            "HOME": os.environ.get("HOME", ""),
+            "DATABASE_URL": database_url,
+            "MONGODB_URI": mongodb_uri,
+            "MONGODB_DATABASE": mongodb_database,
+            "APP_ENV": "development",
+            "AUTH_ALLOW_UNVERIFIED_TOKENS": "true",
+            "BENCH_NO_READ_LOCK": no_lock,
+            "BENCH_TOKEN": token,
+            "BENCH_ERROR_LOG": str(error_log),
+        }
+        server = subprocess.Popen(
+            [
+                sys.executable,
+                str(Path(__file__).with_name("bench_server.py")),
+                "--port",
+                str(port),
+            ],
+            env=env,
+            cwd=BACKEND_DIR,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+        try:
+            base = f"http://127.0.0.1:{port}"
+            expected = {"token": token, "no_read_lock": no_lock == "1"}
+            for _ in range(60):
+                if server.poll() is not None:
+                    raise RuntimeError(f"The benchmark server exited with status {server.poll()}.")
                 try:
-                    server.wait(timeout=10)
-                except subprocess.TimeoutExpired:
-                    server.kill()
-                    server.wait()
-            clean = attempts[-1]["errors"] <= CLEAN_FAILURE_SHARE * (
-                attempts[-1]["requests"] + attempts[-1]["errors"]
-            )
-            if clean:
-                break
-        chosen = attempts[-1]
-        chosen["attempt_failures"] = [a["errors"] for a in attempts]
-        chosen["contaminated"] = not clean
-        results.append(chosen)
+                    reply = httpx.get(f"{base}/__bench/identity", timeout=2)
+                    if reply.status_code == 200:
+                        if reply.json() != expected:
+                            raise RuntimeError("Another server answered; refusing to measure it.")
+                        break
+                except httpx.HTTPError:
+                    time.sleep(0.5)
+            else:
+                raise RuntimeError("The benchmark server did not start.")
+            result = _drive(base, label, user_ids, database_url)
+            result["server_errors"] = summarize_server_log(error_log)
+            results.append(result)
+        finally:
+            server.terminate()
+            try:
+                server.wait(timeout=10)
+            except subprocess.TimeoutExpired:
+                server.kill()
+                server.wait()
     return results
 
 
@@ -680,37 +661,72 @@ def summarize_server_log(path: Path) -> dict[str, int]:
 
 
 class HostSampler(threading.Thread):
-    """Samples PostgreSQL session count and the host's TIME_WAIT sockets while load runs."""
+    """Samples PostgreSQL session count and the host's TIME_WAIT sockets while load runs.
+
+    Sampling can fail (the connection is made through the same path that may be failing),
+    so it records how many samples it attempted and obtained; ``report`` withholds a maximum
+    that covers less than half of the phase instead of presenting a default as a measurement.
+    """
+
+    INTERVAL = 1.0
 
     def __init__(self, database_url: str):
         super().__init__(daemon=True)
         self.database_url = database_url
         self.stop = threading.Event()
-        self.max_sessions = 0
-        self.max_time_wait = None  # None: could not be measured
+        self.attempted = 0
+        self.succeeded = 0
+        self.max_sessions = None
+        self.max_time_wait = None
         self.max_connections = None
+        self.error = ""
 
     def run(self) -> None:
         import psycopg2
 
-        conn = psycopg2.connect(self.database_url)
+        try:
+            conn = psycopg2.connect(self.database_url)
+        except psycopg2.Error as exc:
+            self.error = type(exc).__name__
+            self.attempted += 1
+            return
         conn.autocommit = True
         try:
             with conn.cursor() as cur:
                 cur.execute("SHOW max_connections")
                 self.max_connections = int(cur.fetchone()[0])
                 while not self.stop.is_set():
-                    cur.execute(
-                        "SELECT count(*) FROM pg_stat_activity "
-                        "WHERE backend_type = 'client backend'"
-                    )
-                    self.max_sessions = max(self.max_sessions, cur.fetchone()[0])
+                    self.attempted += 1
+                    try:
+                        cur.execute(
+                            "SELECT count(*) FROM pg_stat_activity "
+                            "WHERE backend_type = 'client backend'"
+                        )
+                        count = cur.fetchone()[0]
+                    except psycopg2.Error as exc:
+                        self.error = type(exc).__name__
+                        return
+                    self.succeeded += 1
+                    self.max_sessions = max(self.max_sessions or 0, count)
                     out = shell("netstat", "-an", "-p", "tcp")
                     if out:  # empty when netstat is blocked (some sandboxes): then unknown
                         self.max_time_wait = max(self.max_time_wait or 0, out.count("TIME_WAIT"))
-                    self.stop.wait(1.0)
+                    self.stop.wait(self.INTERVAL)
+        except psycopg2.Error as exc:
+            self.error = type(exc).__name__
         finally:
             conn.close()
+
+    def report(self, phase_seconds: float) -> dict[str, Any]:
+        expected = max(1, int(phase_seconds / self.INTERVAL))
+        covered = self.succeeded >= expected / 2
+        return {
+            "max_pg_sessions": self.max_sessions if covered else None,
+            "max_connections": self.max_connections if covered else None,
+            "max_time_wait": self.max_time_wait if covered else None,
+            "sampling": f"{self.succeeded} of ~{expected} samples"
+            + (f" (stopped: {self.error})" if self.error else ""),
+        }
 
 
 def _drive(base: str, label: str, user_ids: Sequence[str], database_url: str) -> dict[str, Any]:
@@ -783,9 +799,8 @@ def _drive(base: str, label: str, user_ids: Sequence[str], database_url: str) ->
     latencies, errors, elapsed = run(THROUGHPUT_SECONDS)
     sampler.stop.set()
     sampler.join(timeout=10)
-    if not latencies:
-        raise RuntimeError(f"No successful requests ({label}); errors: {errors[:5]}")
-    stats = summarize(latencies)
+    # Zero successes is a result like any other (all requests failed), not a harness error.
+    stats = summarize(latencies) if latencies else {"median": None, "p95": None}
     codes = {str(code): errors.count(code) for code in sorted(set(errors))}
     return {
         "setting": label,
@@ -796,9 +811,7 @@ def _drive(base: str, label: str, user_ids: Sequence[str], database_url: str) ->
         "error_window_s": (
             [round(min(error_times), 1), round(max(error_times), 1)] if error_times else None
         ),
-        "max_pg_sessions": sampler.max_sessions,
-        "max_connections": sampler.max_connections,
-        "max_time_wait": sampler.max_time_wait,
+        **sampler.report(elapsed),
         "rps": len(latencies) / elapsed,
         "median": stats["median"],
         "p95": stats["p95"],
@@ -952,9 +965,9 @@ def render(args, sections: list[dict[str, Any]]) -> str:
                 md_table(
                     [
                         "Setting",
-                        "Requests (200 OK)",
-                        "Failed (status: count)",
-                        "Requests/s",
+                        "Successful requests (200 OK)",
+                        "Failed requests (status: count)",
+                        "Successful requests/s (failures excluded)",
                         "Median (ms)",
                         "p95 (ms)",
                     ],
@@ -971,14 +984,18 @@ def render(args, sections: list[dict[str, Any]]) -> str:
                     ],
                 ),
                 "",
-                "Failure and host diagnostics per phase (maximum observed during the 30 s; "
+                "Every phase ran once and is reported, in the order run, with no selection. "
+                "Median and p95 are over successful requests only. Diagnostics per phase: "
                 "PostgreSQL sessions are `client backend` rows in `pg_stat_activity`, sampled "
-                "once a second; TIME_WAIT is the host's `netstat` count):",
+                "once a second over a separate connection that can itself fail; a maximum is "
+                "shown only when at least half the expected samples were obtained, and "
+                '"not measured" otherwise. TIME_WAIT is the host\'s `netstat` count.',
                 "",
                 md_table(
                     [
                         "Setting",
                         "Max PG sessions / max_connections",
+                        "Sampling coverage",
                         "Max host TIME_WAIT",
                         "Seconds into the phase when failures occurred",
                         "Client-side failure bodies",
@@ -986,14 +1003,12 @@ def render(args, sections: list[dict[str, Any]]) -> str:
                     ],
                     [
                         (
-                            t["setting"]
-                            + (
-                                f" (attempts' failures: {t['attempt_failures']}"
-                                + ("; STILL CONTAMINATED" if t["contaminated"] else "")
-                                + ")"
-                            ),
-                            f"{t['max_pg_sessions']} / {t['max_connections']}",
-                            "not measurable" if t["max_time_wait"] is None else t["max_time_wait"],
+                            t["setting"],
+                            "not measured"
+                            if t["max_pg_sessions"] is None
+                            else f"{t['max_pg_sessions']} / {t['max_connections']}",
+                            t["sampling"],
+                            "not measured" if t["max_time_wait"] is None else t["max_time_wait"],
                             t["error_window_s"] or "none",
                             t["error_bodies"] or "none",
                             t["server_errors"] or "none",
@@ -1001,11 +1016,6 @@ def render(args, sections: list[dict[str, Any]]) -> str:
                         for t in section["throughput"]
                     ],
                 ),
-                "",
-                "A phase with more than 1% failed requests is discarded and repeated (up to 3 "
-                "attempts, with a cooldown); the first column of the table above notes every "
-                "attempt's failure count, so discarded attempts are disclosed. The failures are "
-                "explained by the control experiment below.",
                 "",
                 f"#### Control: raw connection storm, no application code ({THROUGHPUT_WORKERS} "
                 f"threads, {THROUGHPUT_SECONDS} s)",
