@@ -146,7 +146,7 @@ assumed from memory of an earlier session):
 ### WP-8 fix round final verification update (2026-10-26)
 
 - Branch: `feat/wp8-vault-ui`.
-- commit: (filled in by orchestrator)
+- commit: `2fa8006` (helper edits after `f7ce324`, reviewed and committed by the orchestrator). Orchestrator re-run on `2fa8006`: `npm test` 6 files / 72 tests passed, `npm run build` ✓, `git diff --check` clean.
 - Final check results after adding successful DELETE, pending DELETE navigation, two-way tab-keyboard, and pending/rollback count assertions: `cd frontend && npm test` — 6 files, 72 tests passed; `cd frontend && npm run build` — TypeScript passed, Vite transformed 94 modules and built in 129ms; `git diff --check` passed.
 - Confirmation action label is `Remove`, scoped within the accessible confirmation group.
 - Remaining unverified: live WP-2 integration and manual browser walkthrough. Questions: none.
