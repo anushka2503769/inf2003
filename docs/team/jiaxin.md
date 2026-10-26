@@ -93,3 +93,13 @@ Inspect current code before work. Append task/result/check/PR/next-step notes he
 - Fix round checks: `ruff check` → All checks passed; `ruff format --check` → 55 files
   already formatted; `pytest` (no env) → 73 passed, 56 skipped;
   `run_disposable_db_tests.sh` → 128 passed, 1 xfailed, exit 0; no leftover containers.
+
+### Follow-up: REQUIRED wins in job_skills (2026-10-26)
+
+- Branch: `fix/job-skills-required-wins` (on `feat/wp4-skill-gap`), approved by Zhihao. SQL review: Jason.
+- Resolves the question above. `_replace_job_skills` now keeps REQUIRED when a skill appears
+  twice for one job (`ON CONFLICT ... SET requirement_type = CASE WHEN job_skills.requirement_type
+  = 'REQUIRED' THEN 'REQUIRED' ELSE EXCLUDED.requirement_type END`).
+- `test_engines_agree_when_links_come_from_production_sync` is no longer xfail; it fails on the
+  old line and passes with the fix.
+- Checks: ruff and format clean; pytest `73 passed, 56 skipped`; disposable DB `129 passed`.

@@ -380,8 +380,8 @@ def _both_engines(role: str):
 def test_engines_agree_on_normalised_job_skills_links(role: str) -> None:
     """Engine parity on job_skills seeded by _seed() with REQUIRED precedence applied.
 
-    This proves the two queries count the same way. It does NOT prove production
-    ingestion writes such links: see the xfail test below.
+    This proves the two queries count the same way. The test below proves production
+    ingestion writes such links.
     """
     (mongo_sample, mongo_rows), (sql_sample, sql_rows) = _both_engines(role)
 
@@ -393,12 +393,6 @@ def test_engines_agree_on_normalised_job_skills_links(role: str) -> None:
         assert sql_sample == 4 and len(sql_rows) == 3
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=AssertionError,  # any other error (e.g. the resync failing) is a real failure
-    reason="sql_access._replace_job_skills is last-wins; PRD §4 says REQUIRED wins"
-    " — open question for Zhihao",
-)
 def test_engines_agree_when_links_come_from_production_sync() -> None:
     """Job 1 lists Python REQUIRED then PREFERRED; resync its links the production way."""
     from app.sql_access import replace_job_skills
