@@ -259,10 +259,18 @@ section 10.
 4. **Skill Gap.** Choose a target role in **Target role**. The page shows how many of the
    role's top skills you have and ranks skills by the share of postings that ask for them,
    marking those you already have.
-5. **Profile.** Change your display name and see your account. On this version the resume
-   and confirmed-skills section is a placeholder ("Not built yet"); see section 11. To record
-   a skill you already have, use Skill Gap: tick "I already have this skill" on a gap, then
-   **Add to my skills**.
+5. **Profile.** Change your display name and see your account. Under **Resume and skills**:
+   - **Upload resume** (PDF or DOCX, up to 5 MB). The app checks the type and size before
+     sending. The backend stores the resume text in MongoDB and extracts its skills.
+   - **Skills found in your resume** lists the extracted skills that match the skills
+     dictionary and that you have not confirmed yet, all ticked. Untick any that are wrong,
+     then **Add selected**. Each skill is saved to your profile in PostgreSQL; a skill that
+     fails to save shows **Not saved** with a retry button, and the others stay saved.
+   - **Replace resume** uploads a new file. You keep one current resume; the new one replaces
+     it. If the skills database is unavailable the upload fails and the old resume stays.
+   - The skill editor below adds or removes skills by hand. Confirmed skills drive Discover's
+     skill match and the Skill Gap "You have this" marks. In Skill Gap you can also tick
+     "I already have this skill" on a gap, then **Add to my skills**.
 
 ## 9. Run the tests
 
@@ -314,10 +322,17 @@ npm run build
 To test only the Atlas connection, run `uv run python scripts/check_mongodb_connection.py`
 from `backend/` (it reads `MONGODB_URI` from `backend/.env` and prints success or failure).
 
-## 11. Not yet covered
+## 11. Performance benchmarks (optional)
 
-These parts are still being built; their sections will be added to this manual when they land.
+The numbers in the report's performance section come from a benchmark that runs only on
+throwaway local Docker databases with synthetic data; it never touches your Supabase or Atlas
+projects and reads no `.env` file. With Docker running, from the repository root:
 
-- Resume upload and suggested skills (WP-6): uploading a resume and confirming skills on
-  the Profile screen.
-- Performance benchmarks (WP-10): measuring query and endpoint speed.
+```sh
+bash backend/scripts/run_benchmark.sh
+```
+
+It takes about 10 to 15 minutes, removes its containers when it finishes (also on Ctrl+C), and
+writes `docs/perf/results-2026-10-26.md`. `BENCH_SIZES=5000` runs only the 5,000-job size,
+which is faster. What each case measures and how to read the tables:
+[docs/perf/README.md](perf/README.md).

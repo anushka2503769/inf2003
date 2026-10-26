@@ -174,20 +174,3 @@ export function Notice({
     </div>
   )
 }
-
-/**
- * Marks a section the other pair owns. Says plainly that it is not built, so a
- * reviewer never mistakes an empty screen for a broken one.
- */
-export function NotBuiltYet({ title, body }: { title: string; body: string }) {
-  return (
-    <section className="stack">
-      <h1 className="heading-1">{title}</h1>
-      <hr className="rule" />
-      <p className="prose">{body}</p>
-      <p className="note">
-        This screen is a placeholder from the frontend shell. The feature work lands here.
-      </p>
-    </section>
-  )
-}
