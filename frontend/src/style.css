@@ -12,10 +12,9 @@
  *
  * The shell's CSS sits next to it in src/app/AppShell.css.
  *
- * Below the imports is the compatibility layer: global class names and token
- * names that screens not yet redesigned (Discover, Vault, Skill Gap, Profile)
- * still use. They are restyled in the new look so those screens stay coherent
- * until B2-B4 replace them. Delete an entry once nothing uses it.
+ * Below the imports are the few pre-redesign global classes something still
+ * uses (.note, .actions, .step-count, .saved-mark, and the NotBuiltYet
+ * placeholder's heading-1/rule/stack/prose). Delete an entry once nothing uses it.
  */
 
 @import './styles/tokens.css';
@@ -23,34 +22,6 @@
 @import './styles/base.css';
 @import './styles/components.css';
 @import './styles/entry.css';
-
-/* -------------------------------------------------------------------------- */
-/* Legacy token names (pre-redesign), mapped onto the new tokens               */
-/* -------------------------------------------------------------------------- */
-
-:root {
-  --paper: var(--color-canvas);
-  --card: var(--color-canvas);
-  --ink: var(--color-ink);
-  --ink-soft: var(--color-ink-2);
-  --muted: var(--color-ink-3);
-  --rule: var(--color-border);
-  --ballpoint: var(--color-accent);
-  --stamp: var(--color-danger);
-  --seal: var(--color-accent);
-
-  --font-display: var(--font-sans);
-  --font-prose: var(--font-sans);
-
-  --step-1: var(--text-sm);
-  --step0: var(--text-md);
-  --step1: var(--text-lg);
-  --step2: var(--text-2xl);
-  --step3: var(--text-3xl);
-
-  --rail-width: var(--sidebar-width);
-  --column-width: var(--column-discover);
-}
 
 /* -------------------------------------------------------------------------- */
 /* Legacy type classes                                                         */
@@ -62,28 +33,6 @@
   font-size: var(--text-3xl);
   line-height: var(--leading-3xl);
   letter-spacing: var(--tracking-tight);
-}
-
-.heading-2 {
-  font-family: var(--font-serif);
-  font-weight: var(--weight-regular);
-  font-size: var(--text-2xl);
-  line-height: var(--leading-2xl);
-  letter-spacing: -0.01em;
-}
-
-.heading-3 {
-  font-size: var(--text-xl);
-  line-height: var(--leading-xl);
-  font-weight: var(--weight-semibold);
-  letter-spacing: -0.01em;
-}
-
-.lede {
-  font-size: var(--text-lg);
-  line-height: var(--leading-lg);
-  color: var(--color-ink-2);
-  max-width: 60ch;
 }
 
 .prose {
@@ -98,15 +47,6 @@
   line-height: var(--leading-sm);
   color: var(--color-ink-3);
   max-width: 60ch;
-}
-
-.eyebrow {
-  font-size: var(--text-xs);
-  line-height: var(--leading-xs);
-  font-weight: var(--weight-semibold);
-  letter-spacing: var(--tracking-label);
-  text-transform: uppercase;
-  color: var(--color-ink-3);
 }
 
 .step-count {
@@ -127,10 +67,6 @@
   margin: var(--space-2) 0 var(--space-4);
 }
 
-.rule--heavy {
-  border-top: 2px solid var(--color-ink);
-}
-
 .stack > * + * {
   margin-top: var(--space-5);
 }
@@ -139,121 +75,11 @@
   margin-top: 0;
 }
 
-.stack-sm > * + * {
-  margin-top: var(--space-2);
-}
-
-.stack-lg > * + * {
-  margin-top: var(--space-7);
-}
-
 .actions {
   display: flex;
   align-items: center;
   gap: var(--space-2);
   flex-wrap: wrap;
-}
-
-/* -------------------------------------------------------------------------- */
-/* Legacy buttons: .button maps onto .btn                                      */
-/* -------------------------------------------------------------------------- */
-
-.button {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: var(--space-2);
-  height: 36px;
-  padding: 0 14px;
-  font-family: var(--font-sans);
-  font-size: var(--text-md);
-  line-height: var(--leading-md);
-  font-weight: var(--weight-medium);
-  white-space: nowrap;
-  text-decoration: none;
-  color: var(--color-ink);
-  background: var(--color-canvas);
-  border: 1px solid var(--color-border-strong);
-  border-radius: var(--radius-md);
-  cursor: pointer;
-  transition: background-color var(--duration-fast) var(--ease-out);
-}
-
-.button:hover:not(:disabled) {
-  background: var(--color-hover);
-  color: var(--color-ink);
-}
-
-.button--primary {
-  background: var(--color-ink);
-  border-color: transparent;
-  color: var(--color-on-primary);
-}
-
-.button--primary:hover:not(:disabled) {
-  background: var(--color-primary-hover);
-  color: var(--color-on-primary);
-}
-
-.button--quiet {
-  background: transparent;
-  border-color: transparent;
-  color: var(--color-ink-2);
-}
-
-.button--quiet:hover:not(:disabled) {
-  background: var(--color-hover);
-  color: var(--color-ink);
-}
-
-.button:disabled {
-  background: var(--color-sunken);
-  border-color: transparent;
-  color: var(--color-ink-disabled);
-  cursor: not-allowed;
-}
-
-.button--quiet:disabled {
-  background: transparent;
-}
-
-@media (max-width: 767.98px) {
-  .button {
-    min-height: var(--touch-min);
-  }
-}
-
-/* -------------------------------------------------------------------------- */
-/* Legacy profile pieces                                                       */
-/* -------------------------------------------------------------------------- */
-
-.identity {
-  display: flex;
-  align-items: center;
-  gap: var(--space-4);
-}
-
-.identity__name {
-  font-size: var(--text-lg);
-  line-height: var(--leading-lg);
-  font-weight: var(--weight-semibold);
-}
-
-.avatar {
-  width: 56px;
-  height: 56px;
-  border-radius: var(--radius-full);
-  object-fit: cover;
-  flex: none;
-}
-
-.avatar--letter {
-  display: grid;
-  place-items: center;
-  background: var(--color-accent-soft);
-  color: var(--color-accent-ink);
-  font-size: var(--text-xl);
-  font-weight: var(--weight-semibold);
 }
 
 /* The one deliberate moment of motion: confirmation that a change landed. */

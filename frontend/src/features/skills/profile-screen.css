@@ -10,26 +10,6 @@
   gap: var(--space-5);
 }
 
-.profile__head {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-2);
-}
-
-.profile__title {
-  font-family: var(--font-serif);
-  font-weight: var(--weight-regular);
-  font-size: var(--text-3xl);
-  line-height: var(--leading-3xl);
-  letter-spacing: var(--tracking-tight);
-}
-
-.profile__lede {
-  font-size: var(--text-lg);
-  line-height: var(--leading-lg);
-  color: var(--color-ink-2);
-}
-
 /* Sections are separated by a hairline, as in the hand-off. */
 .profile__section {
   display: flex;
@@ -104,16 +84,6 @@
 @media (max-width: 767.98px) {
   .profile {
     gap: var(--space-4);
-  }
-
-  .profile__title {
-    font-size: var(--text-2xl);
-    line-height: var(--leading-2xl);
-    letter-spacing: -0.01em;
-  }
-
-  .profile__lede {
-    display: none;
   }
 
   .profile__section {
