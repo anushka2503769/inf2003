@@ -142,7 +142,10 @@ def assert_local_urls(database_url: str, mongodb_uri: str) -> None:
 
 
 _URL_CREDENTIALS = re.compile(r"([a-zA-Z][a-zA-Z0-9+.-]*://)[^\s/@]*@")
-_PASSWORD_PARAM = re.compile(r"(?i)\b(password|passwd|pwd)\s*=\s*('[^']*'|\"[^\"]*\"|\S+)")
+# Quoted values may contain backslash-escaped quotes (libpq allows password='ab\'cd').
+_PASSWORD_PARAM = re.compile(
+    r"(?i)\b(password|passwd|pwd)\s*=\s*('(?:[^'\\]|\\.)*'|\"(?:[^\"\\]|\\.)*\"|\S+)"
+)
 
 
 def redact_secrets(text: str, limit: int = 200) -> str:
@@ -270,7 +273,10 @@ def is_permanent_connect_error(exc: BaseException) -> bool:
     if code.startswith(_PERMANENT_SQLSTATES):
         return True
     text = str(exc).lower()
-    return "password authentication failed" in text or "authentication failed" in text
+    return (
+        "authentication failed" in text
+        or ("database" in text and "does not exist" in text)  # 3D000 without a pgcode
+    )
 
 
 def connect_with_retry(database_url: str, attempts: int = 15, pause: float = 4.0, connect=None):

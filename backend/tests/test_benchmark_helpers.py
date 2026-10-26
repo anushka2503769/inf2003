@@ -182,6 +182,7 @@ def test_index_ddl_is_taken_from_migration_003():
         ("could not connect to postgresql://app:s3cr3t@127.0.0.1:5432/db", "s3cr3t"),
         ("DSN host=127.0.0.1 password=hunter2 dbname=x", "hunter2"),
         ("password='two words' user=x", "two words"),
+        ("password='ab\\'secret' user=x", "secret"),
         ("mongodb://root:p%40ss@127.0.0.1:27017/", "p%40ss"),
     ],
 )
@@ -279,3 +280,19 @@ def test_host_sampler_withholds_maximum_when_sampling_failed():
     assert sampler.report(30)["max_pg_sessions"] == 21
     sampler.succeeded = 10  # under half the phase covered
     assert sampler.report(30)["max_pg_sessions"] is None
+
+
+def test_unknown_database_without_pgcode_is_permanent():
+    import psycopg2
+
+    exc = psycopg2.OperationalError('FATAL:  database "bench" does not exist')
+    assert seed_synthetic.is_permanent_connect_error(exc)
+    calls = []
+
+    def connect(_url):
+        calls.append(1)
+        raise exc
+
+    with pytest.raises(psycopg2.OperationalError):
+        seed_synthetic.connect_with_retry("postgresql://u:p@127.0.0.1/x", pause=0, connect=connect)
+    assert len(calls) == 1
