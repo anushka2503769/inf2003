@@ -7,7 +7,7 @@ this copy is the one that is actually enforced.
 
 import re
 from datetime import datetime
-from typing import Annotated, Any
+from typing import Annotated, Any, Literal
 from uuid import UUID
 
 from pydantic import BaseModel, Field, field_validator
@@ -98,6 +98,119 @@ class ResumeUploadResponse(BaseModel):
     file_name: str
     uploaded_at: datetime
     extracted_data: ExtractedData
+
+
+TrackerStatus = Literal["NOT_INTERESTED", "SAVED", "APPLIED", "INTERVIEW", "REJECTED", "OFFER"]
+
+
+class JobSummary(BaseModel):
+    """The job fields a tracker row carries (docs/API.md section 6)."""
+
+    job_id: str
+    title: str
+    company_name: str
+    location: str | None
+    job_type: Literal["FULL_TIME", "PART_TIME", "INTERNSHIP"] | None
+    work_arrangement: Literal["ONSITE", "HYBRID", "REMOTE"] | None
+    application_url: str
+    source: str
+    source_posted_at: datetime | None
+    is_active: bool
+
+
+class TrackerItem(BaseModel):
+    job: JobSummary
+    status: TrackerStatus
+    created_at: datetime
+    updated_at: datetime
+
+
+class TrackerPutRequest(BaseModel):
+    status: TrackerStatus
+
+
+class TrackerListResponse(BaseModel):
+    items: list[TrackerItem]
+    total: int
+
+
+class TrackerSummaryResponse(BaseModel):
+    counts: dict[TrackerStatus, int]
+    total: int
+
+
+# Discover (docs/API.md section 7). JobSummary above is shared with the tracker.
+JobType = Literal["FULL_TIME", "PART_TIME", "INTERNSHIP"]
+WorkArrangement = Literal["ONSITE", "HYBRID", "REMOTE"]
+
+
+class SkillRequirement(BaseModel):
+    skill_id: int
+    name: str
+    requirement_type: Literal["REQUIRED", "PREFERRED"]
+
+
+class JobMatch(BaseModel):
+    required_total: int
+    required_matched: int
+    preferred_total: int
+    preferred_matched: int
+    # required_matched / required_total in 0..1; None when the job lists no
+    # REQUIRED skill, which the frontend labels "no requirements extracted".
+    coverage: float | None
+    matched_skills: list[SkillRequirement]  # REQUIRED first, then by name
+    missing_skills: list[SkillRequirement]  # REQUIRED first, then by name
+
+
+class DiscoverItem(BaseModel):
+    job: JobSummary
+    match: JobMatch
+    rank: int
+
+
+class DiscoverResponse(BaseModel):
+    items: list[DiscoverItem]
+    has_more: bool
+
+
+# Skill gap (docs/API.md section 8, WP-4).
+
+
+class SkillGapRole(BaseModel):
+    role_category: str
+    job_count: int
+
+
+class SkillGapRolesResponse(BaseModel):
+    items: list[SkillGapRole]
+
+
+class SkillGapRow(BaseModel):
+    skill_id: int
+    name: str
+    # Postings in the sample that mention the skill, counted once per job.
+    job_count: int
+    # job_count / sample_size, 0..1.
+    frequency: float
+    # required_count + preferred_count == job_count (REQUIRED wins per job).
+    required_count: int
+    preferred_count: int
+    # Shown as "mentioned in N postings (max X yrs)"; never compared to the user.
+    max_minimum_years: int | float | None
+    years_mentions: int
+    user_has: bool
+
+
+class SkillGapSummary(BaseModel):
+    top_n: int
+    user_has_in_top_n: int
+
+
+class SkillGapResponse(BaseModel):
+    role_category: str
+    sample_size: int
+    skills: list[SkillGapRow]
+    summary: SkillGapSummary
 
 
 from .job_fetch_schemas import FetchJobsResponse  # noqa: E402

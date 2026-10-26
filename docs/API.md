@@ -140,7 +140,7 @@ Removes the caller's decision (undo; the job can reappear in Discover). 204, ide
 | `job_type` | enum | optional, one of the `job_type` values |
 | `work_arrangement` | enum | optional |
 | `location` | string ≤ 100 | optional, literal case-insensitive substring |
-| `q` | string ≤ 100 | optional, literal substring of title or company |
+| `q` | string ≤ 100 | optional, literal case-insensitive substring of title or company |
 | `limit` | int | 1–50, default 20 |
 | `offset` | int | 0–10,000, default 0 |
 
