@@ -68,7 +68,7 @@ Inspect current state before starting. Append task/result/check/PR/next-step not
 
 ### Redesign B2 Discover progress note (2026-10-26)
 
-- Branch: `feat/redesign-b2-discover` (built by the JARVIS designer agent; Zhihao reviews and commits).
+- Branch: `feat/redesign-b2-discover` (built by a design agent; Zhihao reviews and commits).
 - Result: Discover restyled to "The Notebook" on the B1 foundation. One job card at a time, segmented
   coverage meter (one cell per required skill), arrow-key hints on Not interested / Save, plain check and
   dash markers for "You have" / "Missing" (not checkbox-shaped), inline failure with Retry, empty and
