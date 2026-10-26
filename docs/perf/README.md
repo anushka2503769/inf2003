@@ -74,82 +74,71 @@ user would feel.
 
 ## What the committed run showed (2026-10-26, for the report author)
 
-These are readings of `results-2026-10-26.md`; re-run before quoting new numbers.
+These are readings of `results-2026-10-26.md`, which is the official run: produced by the team on
+their own machine (Apple M5, Docker Desktop), outside any sandbox, with
+`bash backend/scripts/run_benchmark.sh`. Re-run before quoting new numbers; timings vary by a few
+tens of percent between runs.
 
-- **The MongoDB `role_category` index is the clear win.** A rare role (about 1% of documents)
-  is about 3x faster at 5,000 documents (0.42 vs 1.22 ms) and about 10x at 50,000 (1.1 vs 10.7
-  ms); the plan changes from COLLSCAN (every document examined) to IXSCAN (only matches). A
-  common role (about 30% of documents) gains only 1.2-1.4x because most documents match anyway.
-- **The Discover partial indexes barely matter at these sizes.** They turn the `jobs` Seq Scan
-  into a Bitmap Index Scan (see the plan excerpt), but the statement's cost is dominated by
-  joining and ranking `job_skills` for every candidate job, which no index on `jobs` removes.
-  Medians are within about 10% for no filter and broad filters, and about 1.1-1.3x better for
-  the selective filter, both sizes, with the two "with" phases agreeing. `jobs_active_posted_at_idx`
-  is not used by Discover at all (its ORDER BY starts with the computed coverage).
-- **The tracker `(user_id, status)` index does nothing measurable here.** Users have at most 50
-  tracker rows (and the heavy user 2,000), and the primary key `(user_id, job_id)` already finds
-  a user's rows directly; the status filter then discards a handful. All variants are "about
-  the same" or within phase-to-phase noise, at both sizes. An earlier draft of this analysis
+- **The MongoDB `role_category` index is the clear win, and it grows with data.** A rare role
+  (about 1% of documents) is about 3.6x faster at 5,000 documents (0.32 and 0.41 ms with the
+  index vs 1.33 ms without) and about 9x at 50,000 (2.6 and 2.1 ms vs 21.3 ms). The plan changes
+  from COLLSCAN (every document examined) to IXSCAN (only matches). A common role (about 30% of
+  documents) gains only about 1.2x at 5,000 and 1.7x at 50,000, because most documents match.
+- **The Discover partial indexes start to matter at 50,000 jobs.** At 5,000 jobs every variant is
+  "about the same" (within 5%). At 50,000 jobs the real request path (new connection per call)
+  is about 1.5x (no filter), 2.2x (broad filter) and 2.0x (selective filter) faster with the
+  indexes. Treat the no-filter row with care: its two "with" phases disagree (322 vs 191 ms),
+  so the size of that effect is uncertain. With a warm connection the broad filter shows no
+  gain; the cost there is joining and ranking `job_skills` for every candidate job, which no
+  index on `jobs` removes. `jobs_active_posted_at_idx` is not used by Discover (its ORDER BY
+  starts with the computed coverage).
+- **The tracker `(user_id, status)` index does nothing measurable here.** Every variant is
+  "about the same" or 1.1-1.2x, which is within the gap between the two "with" phases, at both
+  sizes. Users have at most 50 tracker rows (the supplementary heavy user 2,000), and the
+  primary key `(user_id, job_id)` already finds a user's rows directly. An earlier draft
   claimed a 1.6-1.9x gain at 50,000 jobs; that came from refreshing planner statistics at the
-  same moment the index was dropped, and disappeared once the methodology was fixed.
-- **SQL vs MongoDB for skill gap.** At 5,000 jobs the engines are close for the common role
-  (Mongo aggregation alone 15 ms, `skill_gap_sql` 18 ms, end to end both about 24-26 ms). At
-  50,000 jobs `skill_gap_sql` with the role's ids known is about 1.9x (SE role, 98 vs 184 ms)
-  to 1.8x (rare role, 14.7 vs 26.3 ms) faster than the Mongo aggregation, because it joins
-  narrow indexed rows instead of unwinding and regrouping documents. But SQL needs the role's
-  job ids, which only Mongo stores, so the fair end-to-end comparison for the design as built is
-  `skill_gap_mongo` 192 ms vs SQL end to end 138 ms for the common role, and 32 vs 35 ms for the
-  rare role (roughly equal). Mongo's path also returns `minimum_years`, which SQL cannot.
-- **The shared read lock costs throughput, by an amount this laptop cannot pin down.** In the
-  committed run the lock phases sustained 111 and 134 requests/s (median 83 and 72 ms) and the
-  no-lock phase 135 requests/s (median 69 ms), so the lock cost between 0% and 18%, within the
-  phase-to-phase drift. Earlier runs on the same machine measured 250-285 requests/s without the
-  lock against 100-155 with it (a 40-45% cost). Quote a range ("the lock costs roughly 20-45% of
-  Discover throughput locally"), not one number. The mechanism is certain even if the size is
-  not: the lock is a second PostgreSQL connection per request, and the app opens a fresh
-  connection per call (no pool), so the lock path makes twice as many connection set-ups. The
+  moment the index was dropped, and disappeared once the methodology was fixed.
+- **SQL vs MongoDB for skill gap.** At 5,000 jobs the engines are close: common role, Mongo
+  aggregation alone 14.4 ms vs `skill_gap_sql` 17.3 ms; end to end 24.0 vs 23.7 ms. At 50,000
+  jobs `skill_gap_sql`, with the role's job ids known, is about 1.8x faster than the Mongo
+  aggregation (common role 113 vs 209 ms, rare role 19.4 vs 35.2 ms): it joins narrow indexed
+  rows instead of unwinding and regrouping documents. SQL needs the role's job ids, which only
+  Mongo stores, so for the design as built the fair end-to-end comparison is close: 214 ms
+  (`skill_gap_mongo`) vs 198 ms (SQL end to end) for the common role, 45.7 vs 48.0 ms for the
+  rare role. Mongo's path also returns `minimum_years`, which SQL cannot.
+- **The shared read lock costs about a third of Discover throughput here.** Without the lock the
+  server sustained 230.6 successful requests/s (median 38 ms). With it: 143.4 and 156.4
+  successful requests/s (median 51 and 54 ms), about 32-38% less. The with-lock phases also
+  failed requests (see the Finding below), so they were offered more load than they served. The
   benchmark has no concurrent writer, so it measures the lock's overhead, not its benefit
   (blocking readers while an admin refresh rewrites jobs); say so in the report.
-- **Finding (unresolved): HTTP 503 responses and failed connections in some with-lock
-  phases.** What was observed in the run used for the committed numbers (a sandboxed
-  session, not the team's own machine):
-  - Some with-lock phases returned HTTP 503 `service_unavailable` ("Job synchronization is
-    temporarily unavailable"). The server-side cause chain was `ApiError <- SqlAccessError("SQL
-    job synchronization is unavailable") <- psycopg2.OperationalError: connection to server at
-    "127.0.0.1", port N failed: server closed the connection unexpectedly`; that is, opening
-    the lock's PostgreSQL connection failed. It was not reported as a lock timeout (SQLSTATE
-    55P03).
-  - The failures came in bursts, in the first seconds of a phase in the diagnostic runs, and
-    did not occur in the no-lock phases of those runs (which open one connection per request).
-  - The benchmark samples `pg_stat_activity` once a second over a separate connection. Where
-    sampling worked, the peak was 21 sessions against `max_connections` 100; the sampler itself
-    sometimes failed to connect during the failure windows, so it cannot rule out brief
-    saturation. The results file now prints the sampling coverage and shows "not measured" when
-    fewer than half the expected samples were obtained. PostgreSQL's container log showed no
-    rejected connection in the run where it was inspected (`BENCH_DOCKER_LOGS=1`).
-  - A control with no application code (raw `psycopg2` threads opening connections in a loop,
-    nested pairs mimicking the lock path versus single connections) reproduced a similar
-    pattern of `server closed the connection unexpectedly`, including at 5 workers.
-  - **The cause is not established.** Possible contributors: the sandboxed session and/or Docker
-    Desktop's published-port path dropping new connections under rapid connection churn, and
-    the application's own connection churn (every request opens a fresh PostgreSQL connection,
-    and the lock path opens a second one). The control shows the symptom is reachable without
-    the app; it does not show the app is irrelevant. Host-side TIME_WAIT could not be measured
-    in that session (`netstat` was blocked), so an earlier guess about ephemeral-port exhaustion
-    has no supporting evidence.
-  - **Every phase runs once and is reported as measured**, in order (lock, no lock, lock
-    again), with failures listed beside the successes. Requests/s counts successful requests
-    only, so a phase with failures understates the load that was offered. Nothing is retried or
-    discarded. A harness error (for example the server not starting) aborts the run; zero
-    successful requests is reported as a result.
-  - The numbers in the committed results file come from that sandboxed run. The official
-    numbers for the report should come from an unsandboxed run by the team on their own machine
-    (`bash backend/scripts/run_benchmark.sh`), and this section should then be updated to what
-    that run shows.
-  - A possible application improvement, independent of the cause: a small connection pool
-    (for example `psycopg2.pool.ThreadedConnectionPool`) would remove most per-request
-    connection set-up, and the lock could reuse the request's own connection. That change
-    belongs in `backend/app/` and is deliberately not made here.
+- **Finding: the lock path exhausts the host's outgoing ports under load.**
+  - Both with-lock phases returned HTTP 503 `service_unavailable` (8,170 and 4,335 responses);
+    the no-lock phase returned none. The server-side cause chain is `ApiError <- SqlAccessError
+    <- psycopg2.OperationalError: connection to server at "127.0.0.1", port N failed: server
+    closed the connection unexpectedly`: opening the lock's PostgreSQL connection failed. It is
+    not a lock timeout (that would be SQLSTATE 55P03).
+  - PostgreSQL was not the limit: peak sessions were 18 and 19 of `max_connections` 100, with
+    full sampling coverage (30 of about 30 samples).
+  - The host was: peak sockets in TIME_WAIT reached 16,085 and 14,021 in the with-lock phases
+    against 7,454 without the lock, and failures began 22.6 s and 25.9 s into those phases, once
+    TIME_WAIT had built up. macOS's default range of outgoing (ephemeral) ports is 16,384
+    (49152-65535); check yours with `sysctl net.inet.ip.portrange.first net.inet.ip.portrange.last`.
+  - Why the lock path: the app opens a fresh PostgreSQL connection per call (no pool), and the
+    lock path opens a second one per request. Each closed connection holds its port in TIME_WAIT
+    for a while, so twice the connection rate fills the port range within a 30-second phase.
+  - The raw-connection control (no application code) shows the same: two nested connections per
+    iteration failed early and often, and even one connection per iteration started failing after
+    about 25 s of sustained churn.
+  - What it means for the app: under sustained load the backend, not the database, runs out of
+    connections to open. A small connection pool (for example
+    `psycopg2.pool.ThreadedConnectionPool`), with the lock taken on the request's own connection,
+    would remove most connection set-up and this failure mode. That change belongs in
+    `backend/app/` and is not made here; it is a candidate improvement for the report's
+    discussion section.
+  - Every phase runs once and is reported as measured, in order (lock, no lock, lock again),
+    with failures beside the successes. Nothing is retried or discarded. Requests/s counts
+    successful requests only.
 
 ## Limitations
 
@@ -165,6 +154,6 @@ These are readings of `results-2026-10-26.md`; re-run before quoting new numbers
 - The throughput case uses unsigned development tokens (token verification is skipped) and no
   connection pool; production auth adds a little CPU per request.
 - No concurrent writers in the throughput case, and no connection pool in the app, so the
-  throughput numbers are partly a measurement of connection set-up cost and of how reliably
-  the Docker/host connection path accepts new connections (see the Finding above). Throughput
-  swings by up to about 2x between runs on this laptop.
+  throughput numbers are partly a measurement of connection set-up cost and of the host's
+  outgoing-port limit (see the Finding above). Throughput has swung by up to about 2x between
+  runs on this laptop.
