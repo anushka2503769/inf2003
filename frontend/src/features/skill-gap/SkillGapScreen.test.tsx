@@ -8,9 +8,14 @@ import type { SkillGapClient, SkillGapResponse } from './types'
 
 afterEach(cleanup)
 
+async function pick(role: string) {
+  fireEvent.change(await screen.findByLabelText('Target role'), { target: { value: role } })
+}
+
 describe('SkillGapScreen', () => {
   it('shows roles with counts, ranked details, bar, experience and sample warning below five', async () => {
     render(<SkillGapScreen client={createMockSkillGapClient()} />)
+    await pick('Software Engineering')
     expect(await screen.findByText('Based on 12 active postings for Software Engineering')).toBeInTheDocument()
     expect(screen.getByLabelText('Target role')).toHaveTextContent('Software Engineering (12)')
     expect(MOCK_ROLES.items.every(item => item.job_count > 0)).toBe(true)
@@ -30,6 +35,7 @@ describe('SkillGapScreen', () => {
     const atBoundary: SkillGapResponse = { role_category: 'Boundary', sample_size: 5, skills: [], summary: { top_n: 0, user_has_in_top_n: 0 } }
     const roles = { items: [{ role_category: 'Boundary', job_count: 5 }] }
     render(<SkillGapScreen client={createMockSkillGapClient({ roles, gapByRole: { Boundary: atBoundary } })} />)
+    await pick('Boundary')
     expect(await screen.findByText('Based on 5 active postings for Boundary')).toBeInTheDocument()
     expect(screen.queryByText(/Small sample/)).not.toBeInTheDocument()
   })
@@ -42,6 +48,7 @@ describe('SkillGapScreen', () => {
       gapByRole: { Unclassified: zeroSample, 'Empty result': emptyResult },
     })
     const { container } = render(<SkillGapScreen client={client} />)
+    await pick('Unclassified')
     expect(await screen.findByText('Based on 0 active postings for Unclassified')).toBeInTheDocument()
     expect(screen.getByText('0 / 0 postings · 0%')).toBeInTheDocument()
     expect(screen.getByRole('img', { name: 'Zero sample skill: 0% of postings' })).toBeInTheDocument()
@@ -63,12 +70,28 @@ describe('SkillGapScreen', () => {
     const empty: SkillGapResponse = { role_category: 'Empty', sample_size: 0, skills: [], summary: { top_n: 0, user_has_in_top_n: 0 } }
     const client = createMockSkillGapClient({ roles: { items: [{ role_category: 'Short', job_count: 3 }, { role_category: 'Full', job_count: 10 }, { role_category: 'Empty', job_count: 1 }] }, gapByRole: { Short: short, Full: full, Empty: empty } })
     const { container } = render(<SkillGapScreen client={client} />)
+    await pick('Short')
     expect(await screen.findByText('You have 1 of the top 3 skills for this role.')).toBeInTheDocument()
     fireEvent.change(screen.getByLabelText('Target role'), { target: { value: 'Full' } })
     expect(await screen.findByText('You have 1 of the top 10 skills for this role.')).toBeInTheDocument()
     fireEvent.change(screen.getByLabelText('Target role'), { target: { value: 'Empty' } })
     await screen.findByText('No skill requirements are available for this role yet.')
     expect(container.querySelector('.skill-gap__summary')).not.toBeInTheDocument()
+  })
+
+  it('starts with no role selected and loads a gap only after the student picks one', async () => {
+    const base = createMockSkillGapClient()
+    const client: SkillGapClient = { ...base, forRole: vi.fn(base.forRole) }
+    render(<SkillGapScreen client={client} />)
+    const select = await screen.findByLabelText('Target role')
+    expect(select).toHaveValue('')
+    expect(screen.getByText('Pick a role to see your gap.')).toBeInTheDocument()
+    expect(screen.queryByText(/Based on/)).not.toBeInTheDocument()
+    expect(client.forRole).not.toHaveBeenCalled()
+    await pick('Data Science')
+    expect(await screen.findByText('Based on 4 active postings for Data Science')).toBeInTheDocument()
+    expect(screen.queryByText('Pick a role to see your gap.')).not.toBeInTheDocument()
+    expect(client.forRole).toHaveBeenCalledWith('Data Science', expect.any(AbortSignal))
   })
 
   it('only renders the role label when its select is available', async () => {
@@ -84,6 +107,7 @@ describe('SkillGapScreen', () => {
   it('requires explicit confirmation, updates the has state and summary on successful add', async () => {
     const client = createMockSkillGapClient()
     render(<SkillGapScreen client={client} />)
+    await pick('Software Engineering')
     await screen.findByText(/Based on 12 active postings/)
     const row = screen.getByText('React').closest('li')!
     const checkbox = within(row).getByLabelText('I already have this skill')
@@ -99,6 +123,7 @@ describe('SkillGapScreen', () => {
   it('retains the gap and offers retry after add failure', async () => {
     const client = createMockSkillGapClient({ addError: { status: 503, code: 'service_unavailable', message: 'Temporary outage' } })
     render(<SkillGapScreen client={client} />)
+    await pick('Software Engineering')
     await screen.findByText(/Based on 12 active postings/)
     const row = screen.getByText('React').closest('li')!
     fireEvent.click(within(row).getByLabelText('I already have this skill'))
@@ -116,7 +141,8 @@ describe('SkillGapScreen', () => {
       add: vi.fn(async () => undefined),
     }
     render(<SkillGapScreen client={client} />)
-    fireEvent.change(await screen.findByLabelText('Target role'), { target: { value: 'Data Science' } })
+    await pick('Software Engineering')
+    await pick('Data Science')
     expect(await screen.findByText('Based on 5 active postings for Data Science')).toBeInTheDocument()
     resolveOld({ role_category: 'Software Engineering', sample_size: 99, skills: [], summary: { top_n: 0, user_has_in_top_n: 0 } })
     await waitFor(() => expect(screen.queryByText(/Based on 99/)).not.toBeInTheDocument())
@@ -127,6 +153,7 @@ describe('SkillGapScreen', () => {
     const base = createMockSkillGapClient()
     const client: SkillGapClient = { ...base, add: vi.fn(() => new Promise<void>(resolve => { finishAdd = resolve })) }
     render(<SkillGapScreen client={client} />)
+    await pick('Software Engineering')
     await screen.findByText(/Based on 12 active postings/)
     const reactRow = screen.getByText('React').closest('li')!
     fireEvent.click(within(reactRow).getByLabelText('I already have this skill'))
@@ -148,6 +175,7 @@ describe('SkillGapScreen', () => {
       add: vi.fn(() => new Promise<void>(resolve => { finishAdd = resolve })),
     }
     render(<SkillGapScreen client={client} />)
+    await pick('Role A')
     await screen.findByText('Based on 5 active postings for Role A')
     const rowA = screen.getByText('TypeScript').closest('li')!
     fireEvent.click(within(rowA).getByLabelText('I already have this skill'))
@@ -173,6 +201,7 @@ describe('SkillGapScreen', () => {
       add: vi.fn(() => new Promise<void>(resolve => { finishAdd = resolve })),
     }
     render(<SkillGapScreen client={client} />)
+    await pick('Role A')
     await screen.findByText('Based on 5 active postings for Role A')
     const rowA = screen.getByText('Go').closest('li')!
     fireEvent.click(within(rowA).getByLabelText('I already have this skill'))
@@ -188,6 +217,7 @@ describe('SkillGapScreen', () => {
   it('routes a coded missing-profile response to onboarding using details.resource', async () => {
     const client = createMockSkillGapClient({ gapError: { status: 404, code: 'not_found', message: 'Profile missing', details: { resource: 'profile' } } })
     render(<MemoryRouter><SkillGapScreen client={client} /></MemoryRouter>)
+    await pick('Software Engineering')
     await screen.findByText('Profile missing')
     expect(screen.getByRole('link', { name: 'Start onboarding' })).toHaveAttribute('href', '/welcome')
   })
@@ -200,6 +230,7 @@ describe('SkillGapScreen', () => {
     expect(await screen.findByText('Roles unavailable')).toBeInTheDocument()
     expect(screen.queryByLabelText('Target role')).not.toBeInTheDocument()
     fireEvent.click(screen.getByRole('button', { name: 'Retry roles' }))
+    await pick('Recovered role')
     expect(await screen.findByText('Based on 6 active postings for Recovered role')).toBeInTheDocument()
     expect(roleAttempts).toBe(2)
     cleanup()
@@ -208,6 +239,7 @@ describe('SkillGapScreen', () => {
     const gapResponse: SkillGapResponse = { role_category: 'Retry role', sample_size: 6, skills: [{ skill_id: 88, name: 'Rust', job_count: 3, frequency: .5, required_count: 2, preferred_count: 1, max_minimum_years: null, years_mentions: 0, user_has: false }], summary: { top_n: 1, user_has_in_top_n: 0 } }
     const gapClient: SkillGapClient = { roles: async () => ({ items: [{ role_category: 'Retry role', job_count: 6 }] }), forRole: vi.fn(async () => { if (++gapAttempts === 1) throw { status: 503, code: 'service_unavailable', message: 'Gaps unavailable' }; return gapResponse }), add: async () => undefined }
     render(<SkillGapScreen client={gapClient} />)
+    await pick('Retry role')
     expect(await screen.findByText('Gaps unavailable')).toBeInTheDocument()
     fireEvent.click(screen.getByRole('button', { name: 'Retry skill gaps' }))
     expect(await screen.findByText('Based on 6 active postings for Retry role')).toBeInTheDocument()

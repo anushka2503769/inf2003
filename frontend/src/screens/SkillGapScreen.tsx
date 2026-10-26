@@ -48,7 +48,7 @@ export function SkillGapScreen({ client = skillGapClient }: { client?: SkillGapC
     try {
       const result = await client.roles()
       setRoles(result.items)
-      setRole(current => result.items.some(item => item.role_category === current) ? current : result.items[0]?.role_category ?? '')
+      setRole(current => result.items.some(item => item.role_category === current) ? current : '')
     } catch (cause) { setRolesError(displayError(cause)); setRolesProfileMissing(isProfileMissing(cause)) }
     finally { setRolesLoading(false) }
   }
@@ -109,8 +109,9 @@ export function SkillGapScreen({ client = skillGapClient }: { client?: SkillGapC
       <h1 className="heading-1">Skill Gap</h1>
       <hr className="rule rule--heavy" />
       {rolesLoading ? <p role="status">Loading roles…</p> : rolesError ? <div className="stack-sm"><InlineError>{rolesError}</InlineError>{rolesProfileMissing ? <Link to={routes.welcome}>Start onboarding</Link> : null}<button className="button" type="button" onClick={() => void loadRoles()}>Retry roles</button></div> : roles.length === 0 ? <p>No roles have active postings yet.</p> : <><label className="skill-gap__role-label" htmlFor="skill-gap-role">Target role</label><select id="skill-gap-role" aria-label="Target role" value={role} onChange={event => setRole(event.target.value)}>
+        <option value="" disabled>Pick a role…</option>
         {roles.map(item => <option key={item.role_category} value={item.role_category}>{item.role_category} ({item.job_count})</option>)}
-      </select></>}
+      </select>{role ? null : <p>Pick a role to see your gap.</p>}</>}
     </section>
     {role && <section className="stack">
       {gapLoading && !gap ? <p role="status">Loading skill gaps…</p> : null}

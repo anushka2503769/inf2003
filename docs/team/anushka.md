@@ -135,3 +135,14 @@ assumed from memory of an earlier session):
 - Preserved cross-role add reconciliation tests: `keeps a successfully added skill confirmed when the selected role also contains it` and `overlays a successful add on a role GET that resolves afterward`.
 - Checks: targeted screen suite 13/13 passed; final `npm test` 59/59 across 5 files; `npm run build` passed (Vite transformed 94 modules, built in 101ms).
 - Unverified: live endpoint/Supabase/Mongo integration remains untested; mocks remain selected by default. No commit made.
+
+### WP-9 follow-up: no role pre-selected (2026-10-26)
+
+- Decided by Zhihao. Skill Gap no longer auto-selects the first role. It opens on a disabled
+  "Pick a role…" option with "Pick a role to see your gap." and fetches nothing until the
+  student picks a role. (The profile has no target role to pre-select from.) A role the student
+  picked is kept when the role list reloads.
+- The "I already have this skill" tick-box gate on "Add to my skills" stays, as built.
+- New test "starts with no role selected and loads a gap only after the student picks one"
+  (fails with the old auto-select). Existing tests now pick their role explicitly.
+- Checks: `npm test` 5 files / 60 tests passed; `npm run build` ✓; `git diff --check` clean.
