@@ -47,7 +47,8 @@ ones need the disposable Postgres, see §6), frontend `npm run build` clean, `np
 - Profile + confirmed skills on real PostgreSQL via psycopg2 (`sql_profile.py`, `sql_skills.py`);
   in-memory profile store only when `DATABASE_URL` is empty outside production.
 - Resume upload (PDF/DOCX ≤ 5 MB) → rule-based extraction → MongoDB `resume_documents` (one per user).
-- Job pipeline: providers `arbeitnow`, `devitjobs_uk`, `ai_dev_jobs` (no API keys) →
+- Job pipeline: providers `arbeitnow`, `ai_dev_jobs` (no API keys; `devitjobs_uk` was removed
+  on 2026-10-26 because its feed now redirects to a sign-up page) →
   SQL upsert by `(source, external_job_id)` → Mongo `job_documents` → `job_skills` links →
   ready → active. Rule-based skill/requirement extraction and role classification. Admin-only.
 - Job read routes (list, search, stats, by id) over Mongo filtered by active SQL ids.
@@ -81,7 +82,7 @@ These close the "still open" items of PRD v1. Change them only through Zhihao.
 | Topic | Decision |
 |---|---|
 | Extraction | Stay **rule-based** (dictionary regex + heuristics). No LLM in this build. Report it honestly as rule-based. |
-| Job provider | **Primary:** a one-off LinkedIn Singapore export via Apify (`backend/scripts/fetch_linkedin_apify.py`, 18 internship searches across tech and non-tech roles, ≤ 30 each, ≤ US$2), imported from file. **Secondary:** the three implemented keyless providers. Target 200–500 active jobs. The report must state LinkedIn data was collected once via Apify for coursework only. |
+| Job provider | **Primary:** a one-off LinkedIn Singapore export via Apify (`backend/scripts/fetch_linkedin_apify.py`, 18 internship searches across tech and non-tech roles, ≤ 30 each, ≤ US$2), imported from file. **Secondary:** the two keyless providers (Arbeitnow, AI Dev Jobs), which list mostly non-Singapore jobs: they are proven by a live run into the disposable database only, and the **shared database holds Singapore jobs only** (decided 2026-10-26). Target 200–500 active jobs. The report must state LinkedIn data was collected once via Apify for coursework only. |
 | Tracker statuses | `NOT_INTERESTED, SAVED, APPLIED, INTERVIEW, REJECTED, OFFER` (as in the SQL CHECK). |
 | Swipe persistence | **One immediate `PUT` per decision** with optimistic UI and a visible retry on failure. No browser batching, no offline queue. |
 | Requeue | `DELETE /api/me/jobs/{job_id}` removes a decision ("undo"), so the job can reappear in Discover. This is the tracker's D in CRUD. |
@@ -258,9 +259,10 @@ Branch `feat/wp5-ingestion`. Files: `backend/app/job_sources.py`, `backend/app/j
 2. `fetch-multi` processes records independently: one bad record is counted and skipped,
    not fatal. Response adds `summary {requested, inserted, updated, rejected, errors[]}`
    (inserted vs updated from `xmax = 0` on the upsert's `RETURNING`).
-3. `scripts/ingest_jobs.py --sources arbeitnow devitjobs_uk --limit-per-source 200` runs the
-   same pipeline from the CLI using `backend/.env`, prints the summary, exits non-zero on
-   total failure. Prefer internships / junior roles where the provider allows filtering.
+3. `scripts/ingest_jobs.py --sources arbeitnow ai_dev_jobs --limit-per-source 200` runs the
+   same pipeline from the CLI using the environment it is given, prints the summary, exits
+   non-zero on total failure. Prefer internships / junior roles where the provider allows
+   filtering. Run it against the disposable database, not the shared one (see Job provider).
 4. **LinkedIn file source (primary demo data).** Add source `linkedin_apify` that reads a
    file produced by `backend/scripts/fetch_linkedin_apify.py` (already written, run by Zhihao):
    `ingest_jobs.py --file data/raw/linkedin_sg_<date>.json`. The file is

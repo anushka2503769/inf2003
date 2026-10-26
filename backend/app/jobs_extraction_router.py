@@ -1,5 +1,6 @@
 """Administrator re-extraction with SQL link synchronization."""
 
+import json
 from typing import List
 
 from fastapi import APIRouter
@@ -45,17 +46,46 @@ def _mark_pending(db: Database, document_id: object, job_id: str) -> None:
         pass
 
 
+def _extraction_input(doc: dict) -> str:
+    """
+    Rebuild what import extracted from. Provider jobs store their JSON as raw_jd,
+    but a LinkedIn file import stores only the plain description, so the stored
+    title is added back; without it the role is classified from the description alone.
+    """
+    raw_jd = doc["raw_jd"]
+    try:
+        if isinstance(json.loads(raw_jd), dict):
+            return raw_jd
+    except (json.JSONDecodeError, TypeError):
+        pass
+    title = ((doc.get("extracted_data") or {}).get("provider") or {}).get("title")
+    if not title:
+        return raw_jd
+    return json.dumps({"title": title, "description": raw_jd}, ensure_ascii=False)
+
+
+def _keep_imported_context(extracted_data: dict, previous: dict) -> None:
+    """
+    Keep what only import could know: a known industry (LinkedIn supplies its own,
+    which the classifier cannot reproduce) and responsibilities parsed from the
+    provider's HTML, which is not stored.
+    """
+    if previous.get("industry") not in (None, "", "Unclassified"):
+        extracted_data["industry"] = previous["industry"]
+    if not extracted_data.get("responsibilities") and previous.get("responsibilities"):
+        extracted_data["responsibilities"] = previous["responsibilities"]
+
+
 def _extract_one(db: Database, doc: dict) -> ExtractSkillsResult:
     job_id = str(doc.get("job_id", ""))
     try:
         ensure_sql_job_exists(job_id)
         set_job_active(job_id, False)
-        extracted_data = extract_skills_from_job(doc["raw_jd"], require_database=True)
-        provider = (
-            extracted_data.get("provider")
-            or (doc.get("extracted_data") or {}).get("provider")
-            or {}
-        )
+        previous = doc.get("extracted_data") or {}
+        extracted_data = extract_skills_from_job(_extraction_input(doc), require_database=True)
+        _keep_imported_context(extracted_data, previous)
+        # The stored provider block came from the full provider record at import.
+        provider = dict(previous.get("provider") or extracted_data.get("provider") or {})
         provider["ready"] = "false"
         extracted_data["provider"] = provider
         db["job_documents"].update_one(

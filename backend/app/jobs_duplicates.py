@@ -5,7 +5,7 @@ Duplicate key priority:
 1. url (from raw_jd's JSON, if present and non-empty) - most reliable,
    since it points to the exact same posting.
 2. (title, company) pair, lowercased - fallback for documents without a
-   url (e.g. DevITjobs UK postings, which don't include one), or for
+   url (e.g. provider postings that don't include one), or for
    manually-ingested job descriptions via /api/jobs/ingest where raw_jd
    is plain text, not JSON.
 

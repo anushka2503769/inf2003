@@ -1,0 +1,40 @@
+{
+  "jobs": [
+    {
+      "id": "aidev-1",
+      "title": "Machine Learning Intern",
+      "company_name": "Example Labs",
+      "location": "London",
+      "workplace": "hybrid",
+      "job_type": "internship",
+      "posted_at": "2026-10-10T12:00:00Z",
+      "tags": ["ml"],
+      "url": "https://www.example.com/aidev/1",
+      "description": "<p>Work with models.</p>"
+    },
+    {
+      "id": "aidev-2",
+      "title": "AI Engineer",
+      "company_name": "Sample AI Ltd",
+      "location": null,
+      "workplace": "remote",
+      "employment_type": "Full-time",
+      "created_at": "2026-10-11",
+      "tags": [],
+      "apply_url": "https://www.example.com/aidev/2",
+      "description": "<p>Ship features.</p>"
+    },
+    {
+      "id": "aidev-3",
+      "title": "Data Engineer",
+      "company_name": "Demo Data Ltd",
+      "location": "Manchester",
+      "workplace": "onsite",
+      "employment_type": "part_time",
+      "tags": [],
+      "url": "https://www.example.com/aidev/3",
+      "description": ""
+    },
+    "not-a-record"
+  ]
+}
