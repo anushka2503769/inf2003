@@ -7,7 +7,7 @@ this copy is the one that is actually enforced.
 
 import re
 from datetime import datetime
-from typing import Annotated, Any
+from typing import Annotated, Any, Literal
 from uuid import UUID
 
 from pydantic import BaseModel, Field, field_validator
@@ -98,3 +98,42 @@ class ResumeUploadResponse(BaseModel):
     file_name: str
     uploaded_at: datetime
     extracted_data: ExtractedData
+
+
+TrackerStatus = Literal["NOT_INTERESTED", "SAVED", "APPLIED", "INTERVIEW", "REJECTED", "OFFER"]
+
+
+class JobSummary(BaseModel):
+    """The job fields a tracker row carries (docs/API.md section 6)."""
+
+    job_id: str
+    title: str
+    company_name: str
+    location: str | None
+    job_type: Literal["FULL_TIME", "PART_TIME", "INTERNSHIP"] | None
+    work_arrangement: Literal["ONSITE", "HYBRID", "REMOTE"] | None
+    application_url: str
+    source: str
+    source_posted_at: datetime | None
+    is_active: bool
+
+
+class TrackerItem(BaseModel):
+    job: JobSummary
+    status: TrackerStatus
+    created_at: datetime
+    updated_at: datetime
+
+
+class TrackerPutRequest(BaseModel):
+    status: TrackerStatus
+
+
+class TrackerListResponse(BaseModel):
+    items: list[TrackerItem]
+    total: int
+
+
+class TrackerSummaryResponse(BaseModel):
+    counts: dict[TrackerStatus, int]
+    total: int
