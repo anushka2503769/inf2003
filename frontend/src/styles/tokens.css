@@ -76,6 +76,8 @@
   /* Spacing (4px base) */
   --space-1: 4px;  --space-2: 8px;  --space-3: 12px; --space-4: 16px;
   --space-5: 24px; --space-6: 32px; --space-7: 48px; --space-8: 64px; --space-9: 96px;
+  --space-hair: 2px; /* between stacked nav items */
+  --control-pad-sm: 10px; --control-pad: 14px; --control-pad-lg: 18px; /* horizontal padding inside controls */
 
   /* Radius */
   --radius-sm: 4px;    /* badges, chips, kbd, meter cells */

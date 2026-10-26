@@ -20,7 +20,9 @@ export function AuthCallbackScreen() {
   const [tooSlow, setTooSlow] = useState(false)
 
   const providerError = params.get('error_description') ?? params.get('error')
-  const cancelled = params.get('error') === 'access_denied' || providerError === 'access_denied'
+  // Prefer the error code; fall back to the description only when no code was sent.
+  const errorCode = params.get('error')
+  const cancelled = errorCode === 'access_denied' || (errorCode === null && providerError === 'access_denied')
 
   useEffect(() => {
     // If the exchange has not completed in a few seconds, something is wrong
