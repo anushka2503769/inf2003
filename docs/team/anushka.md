@@ -116,3 +116,37 @@ assumed from memory of an earlier session):
   (profile shell), not touched here.
 - No PR into `dev` exists yet for the skill-editor frontend work itself
   (`realClient.ts` + the `skillsApi` addition below) — opening one is next.
+
+### WP-8 progress note (overnight 2026-10-26)
+
+- Branch: `feat/wp8-vault-ui`.
+- commit: `ac1a9a8` (Codex build) + `97d8d52` (review fix round); orchestrator re-ran checks on `97d8d52`: npm test 70 passed, npm run build clean
+- Result: Vault tracker screen, contract-shaped stateful mock, and real shared-transport adapter implemented. Current default remains MOCK.
+- Checks: `cd frontend && npm test` — 6 files, 58 tests passed. `cd frontend && npm run build` — TypeScript and Vite production build passed (94 modules transformed).
+- Unverified: no live WP-2/backend integration or manual browser walkthrough; no shared database or network calls were made.
+- Questions: none. Integration can switch to the real adapter when WP-2 is available on dev.
+- Exact real-client switch in `frontend/src/features/tracker/defaultClient.ts`: replace `import { createMockTrackerClient as createTrackerClient } from './mocks'` with `import { createRealTrackerClient as createTrackerClient } from './realClient'`.
+
+
+### WP-8 fix round (2026-10-26)
+
+- Branch: `feat/wp8-vault-ui`.
+- commit: `ac1a9a8` (Codex build) + `97d8d52` (review fix round); orchestrator re-ran checks on `97d8d52`: npm test 70 passed, npm run build clean
+- Findings 1–3 fixed: status changes on the last page step back and reload; page controls lock during writes; empty states use the filtered visible rows.
+- Finding 4 fixed: accessible inline confirmation supports Cancel, Remove, Escape, initial focus and focus return; DELETE failure leaves the row and confirmation open.
+- Findings 5–6 fixed: posting links require HTTP(S); inactive listings show “No longer listed” while status remains editable.
+- Finding 7 fixed: UI uses `toDisplayMessage`; real adapter preserves `ApiError` status/code/details and 5xx messages are masked.
+- Finding 8 fixed: mock PUT creates known active untracked rows, same-status PUT preserves `updated_at`, changed status advances it, unknown/inactive jobs return 404, and 23 synthetic SAVED rows are seeded.
+- Finding 9 fixed: all six count tabs link to the tab panel and Arrow keys move selection/focus.
+- Missing coverage added: failed status updates restore both row/status and counts; six tab labels/counts are asserted.
+- Checks: `cd frontend && npm test` — 6 files, 70 tests passed. `cd frontend && npm run build` — TypeScript passed; Vite transformed 94 modules and built in 111ms. `git diff --check` passed.
+- Unverified: no live WP-2 backend integration or manual browser walkthrough; no network/shared database calls were made.
+- Questions: none.
+
+### WP-8 fix round final verification update (2026-10-26)
+
+- Branch: `feat/wp8-vault-ui`.
+- commit: `2fa8006` (helper edits after `f7ce324`, reviewed and committed by the orchestrator). Orchestrator re-run on `2fa8006`: `npm test` 6 files / 72 tests passed, `npm run build` ✓, `git diff --check` clean.
+- Final check results after adding successful DELETE, pending DELETE navigation, two-way tab-keyboard, and pending/rollback count assertions: `cd frontend && npm test` — 6 files, 72 tests passed; `cd frontend && npm run build` — TypeScript passed, Vite transformed 94 modules and built in 129ms; `git diff --check` passed.
+- Confirmation action label is `Remove`, scoped within the accessible confirmation group.
+- Remaining unverified: live WP-2 integration and manual browser walkthrough. Questions: none.
