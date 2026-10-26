@@ -1,0 +1,137 @@
+.vault__header {
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.vault__tabs {
+  display: flex;
+  gap: 0.25rem;
+  overflow-x: auto;
+  border-bottom: 1px solid var(--rule);
+}
+
+.vault__tab {
+  flex: 0 0 auto;
+  border: 0;
+  border-bottom: 3px solid transparent;
+  padding: 0.65rem 0.75rem;
+  background: transparent;
+  color: var(--ink-soft);
+  font: inherit;
+  cursor: pointer;
+}
+
+.vault__tab span {
+  margin-left: 0.25rem;
+  color: var(--ink-soft);
+  font-variant-numeric: tabular-nums;
+}
+
+.vault__tab--active {
+  border-bottom-color: var(--ballpoint);
+  color: var(--ink);
+  font-weight: 700;
+}
+
+.vault__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.vault__row {
+  display: flex;
+  justify-content: space-between;
+  gap: 1.25rem;
+  padding: 1rem 0;
+  border-bottom: 1px solid var(--rule);
+}
+
+.vault__details > * + * {
+  margin-top: 0.25rem;
+}
+
+.vault__details > p:first-of-type {
+  color: var(--ink-soft);
+}
+
+.vault__actions {
+  display: flex;
+  align-items: center;
+  justify-content: end;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+}
+
+.vault__status-label {
+  display: grid;
+  gap: 0.2rem;
+  color: var(--ink-soft);
+  font-size: var(--step-1);
+}
+
+.vault__status-label select {
+  max-width: 11rem;
+  border: 1px solid var(--rule);
+  border-radius: 2px;
+  padding: 0.4rem;
+  background: var(--card);
+  color: var(--ink);
+  font: inherit;
+}
+
+.vault__empty {
+  padding: 2rem 0;
+  border-bottom: 1px solid var(--rule);
+}
+
+.vault__empty > * + * {
+  margin-top: 0.5rem;
+}
+
+.vault__error {
+  color: var(--stamp);
+}
+
+.vault__notice {
+  color: var(--ink-soft);
+}
+
+.vault__pagination {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+@media (max-width: 42rem) {
+  .vault__header,
+  .vault__row {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .vault__actions {
+    justify-content: flex-start;
+  }
+}
+
+.vault__confirm {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  padding: 0.5rem;
+  border: 1px solid var(--stamp);
+}
+
+.vault__inactive {
+  display: inline-block;
+  border: 1px solid var(--stamp);
+  padding: 0.05rem 0.35rem;
+  color: var(--stamp);
+  font-size: var(--step-1);
+  font-weight: 600;
+}
