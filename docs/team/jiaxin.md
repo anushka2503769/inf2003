@@ -88,3 +88,16 @@ Inspect current code before work. Append task/result/check/PR/next-step notes he
   stored document (e.g. prefix the title from `extracted_data.provider.title`) and, after extraction, keep
   the existing `extracted_data.industry` when the new value is "Unclassified" (or when the document's source is
   `linkedin_apify`).
+
+### Follow-up: re-extraction keeps imported LinkedIn context (2026-10-26)
+
+- Branch: `fix/reextract-keeps-context` (on `feat/wp5-ingestion`), approved by Zhihao.
+- Resolves the open question above. `_extract_one` now rebuilds the import's input (the stored
+  provider title plus the plain description), keeps a known stored industry, keeps the
+  import-time responsibilities when re-extraction finds none, and prefers the stored provider block.
+- Without it, re-extracting the synthetic LinkedIn job turned industry and role into
+  "Unclassified" (so the job left its Skill Gap role) and emptied its responsibilities.
+- Tests: the strict xfail now passes; new `test_reextraction_input_adds_the_stored_title_only_to_plain_text`
+  and `test_reextraction_replaces_only_an_unknown_industry`. Each part was mutation-checked.
+- Checks: ruff and format clean; pytest `76 passed, 39 skipped`; disposable DB `115 passed`.
+- Trade-off: a stored industry other than "Unclassified" is never re-classified.

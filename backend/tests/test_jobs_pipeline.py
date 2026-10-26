@@ -823,11 +823,6 @@ def test_intern_title_matching(title: str, expected) -> None:
     assert job_sources.infer_job_type(title) == expected
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="Re-extraction (jobs_extraction_router._extract_one) rebuilds context from raw_jd "
-    "only, so a LinkedIn job loses its imported industry. Needs a router/extraction change.",
-)
 def test_reextraction_keeps_imported_linkedin_industry(monkeypatch) -> None:
     from app import jobs_extraction_router as router
 
@@ -845,6 +840,7 @@ def test_reextraction_keeps_imported_linkedin_industry(monkeypatch) -> None:
     job_id = str(stored[0].job_id)
     document = dict(collection.documents[job_id], _id="doc-1")
     assert document["extracted_data"]["industry"] == "IT Services and IT Consulting"
+    imported = json.loads(json.dumps(document["extracted_data"]))
 
     class _Db:
         def __getitem__(self, name):
@@ -859,7 +855,38 @@ def test_reextraction_keeps_imported_linkedin_industry(monkeypatch) -> None:
     monkeypatch.setattr(router, "set_job_active", lambda *_: None)
     monkeypatch.setattr(router, "replace_job_skills", lambda *_: None)
     router._extract_one(_Db(), document)
-    assert document["extracted_data"]["industry"] == "IT Services and IT Consulting"
+    after = document["extracted_data"]
+    assert after["industry"] == "IT Services and IT Consulting"
+    assert after["role_category"] == imported["role_category"]
+    assert after["responsibilities"] == imported["responsibilities"]
+    assert {key: after["provider"][key] for key in ("source", "title", "external_job_id")} == {
+        key: imported["provider"][key] for key in ("source", "title", "external_job_id")
+    }
+
+
+def test_reextraction_input_adds_the_stored_title_only_to_plain_text() -> None:
+    from app.jobs_extraction_router import _extraction_input
+
+    provider_json = json.dumps({"title": "Data Intern", "description": "SQL"})
+    assert _extraction_input({"raw_jd": provider_json}) == provider_json
+    pasted = {"raw_jd": "Pasted text about SQL", "extracted_data": {"provider": None}}
+    assert _extraction_input(pasted) == "Pasted text about SQL"
+    linkedin = {"raw_jd": "We use SQL.", "extracted_data": {"provider": {"title": "Data Intern"}}}
+    assert json.loads(_extraction_input(linkedin)) == {
+        "title": "Data Intern",
+        "description": "We use SQL.",
+    }
+
+
+def test_reextraction_replaces_only_an_unknown_industry() -> None:
+    from app.jobs_extraction_router import _keep_imported_context
+
+    fresh = {"industry": "Technology", "responsibilities": ["Build"]}
+    _keep_imported_context(fresh, {"industry": "Unclassified", "responsibilities": ["Old"]})
+    assert fresh == {"industry": "Technology", "responsibilities": ["Build"]}
+    fresh = {"industry": "Unclassified", "responsibilities": []}
+    _keep_imported_context(fresh, {"industry": "Banking", "responsibilities": ["Report"]})
+    assert fresh == {"industry": "Banking", "responsibilities": ["Report"]}
 
 
 # --- SQL columns against a disposable database (skipped without TEST_DATABASE_URL) ---
