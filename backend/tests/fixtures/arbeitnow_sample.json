@@ -1,0 +1,41 @@
+{
+  "data": [
+    {
+      "slug": "python-intern-example-1",
+      "company_name": "Example GmbH",
+      "title": "Python Intern",
+      "description": "<p>Hybrid role in Berlin.</p><ul><li>Write tests</li></ul>",
+      "remote": false,
+      "url": "https://www.example.com/jobs/python-intern-example-1",
+      "tags": ["python"],
+      "job_types": ["Full Time"],
+      "location": "Berlin",
+      "created_at": 1760000000
+    },
+    {
+      "slug": "backend-dev-example-2",
+      "company_name": "Beispiel AG",
+      "title": "Backend Developer",
+      "description": "<p>Build APIs.</p>",
+      "remote": true,
+      "url": "https://www.example.com/jobs/backend-dev-example-2",
+      "tags": ["java"],
+      "job_types": ["Part Time"],
+      "location": "Not specified",
+      "created_at": 1760086400
+    },
+    {
+      "slug": "support-example-3",
+      "company_name": "Muster GmbH",
+      "title": "Support Engineer",
+      "description": "<p>Help customers.</p>",
+      "remote": false,
+      "url": "https://www.example.com/jobs/support-example-3",
+      "tags": [],
+      "job_types": [],
+      "location": "",
+      "created_at": null
+    }
+  ],
+  "links": {"next": null}
+}
