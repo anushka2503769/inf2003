@@ -171,3 +171,43 @@ class DiscoverItem(BaseModel):
 class DiscoverResponse(BaseModel):
     items: list[DiscoverItem]
     has_more: bool
+
+
+# Skill gap (docs/API.md section 8, WP-4).
+
+
+class SkillGapRole(BaseModel):
+    role_category: str
+    job_count: int
+
+
+class SkillGapRolesResponse(BaseModel):
+    items: list[SkillGapRole]
+
+
+class SkillGapRow(BaseModel):
+    skill_id: int
+    name: str
+    # Postings in the sample that mention the skill, counted once per job.
+    job_count: int
+    # job_count / sample_size, 0..1.
+    frequency: float
+    # required_count + preferred_count == job_count (REQUIRED wins per job).
+    required_count: int
+    preferred_count: int
+    # Shown as "mentioned in N postings (max X yrs)"; never compared to the user.
+    max_minimum_years: int | float | None
+    years_mentions: int
+    user_has: bool
+
+
+class SkillGapSummary(BaseModel):
+    top_n: int
+    user_has_in_top_n: int
+
+
+class SkillGapResponse(BaseModel):
+    role_category: str
+    sample_size: int
+    skills: list[SkillGapRow]
+    summary: SkillGapSummary

@@ -223,7 +223,10 @@ def _replace_job_skills(
             INSERT INTO public.job_skills (job_id, skill_id, requirement_type)
             VALUES (%s, %s, %s)
             ON CONFLICT (job_id, skill_id) DO UPDATE
-                SET requirement_type = EXCLUDED.requirement_type
+                SET requirement_type = CASE
+                    WHEN job_skills.requirement_type = 'REQUIRED' THEN 'REQUIRED'
+                    ELSE EXCLUDED.requirement_type
+                END
             """,
             (job_id, skill_id, requirement_type),
         )
