@@ -84,3 +84,12 @@ task/PR, integration checks and next milestone notes here without duplicating ev
 - Route-wiring test now enumerates every job route (jobs, search, duplicates, external multi,
   extraction); the duplicates preview is a listed known exception. Mutating fetch-multi to the
   read dependency made the test fail (verified, then restored).
+
+### WP-0 follow-up: duplicates preview takes the shared lock (2026-10-26)
+
+- Branch: `fix/duplicates-read-lock` (on `fix/wp0-dev-proxy-and-read-lock`), approved by Zhihao.
+- `GET /api/jobs/duplicates` now uses `AdminJobReadDatabase` (admin auth + shared lock), so
+  it no longer blocks student reads. `DELETE /api/jobs/duplicates` keeps the exclusive lock.
+- The route-wiring test's known exception is removed; it now asserts the duplicates GET is
+  covered and fails on the old dependency.
+- Checks: ruff and format clean; pytest `58 passed, 39 skipped`; disposable DB `97 passed`.

@@ -231,9 +231,6 @@ def test_every_job_route_uses_the_right_lock_and_authorization() -> None:
 
     read_deps = {dependencies.get_authenticated_job_db, dependencies.get_admin_job_read_db}
     write_dep = dependencies.get_admin_job_db
-    # Known exception pending Zhihao: the read-only duplicates preview still uses the
-    # exclusive admin dependency; switching it to AdminJobReadDatabase completes WP-0.
-    pending_read_on_write = {("GET", "/api/jobs/duplicates")}
 
     def collect(route: APIRoute) -> set:
         stack, found = [route.dependant], set()
@@ -251,7 +248,7 @@ def test_every_job_route_uses_the_right_lock_and_authorization() -> None:
                 key = (method, route.path)
                 seen.add(key)
                 found = collect(route)
-                if method == "GET" and key not in pending_read_on_write:
+                if method == "GET":
                     assert found & read_deps and write_dep not in found, key
                 else:
                     assert write_dep in found and not found & read_deps, key
@@ -260,6 +257,7 @@ def test_every_job_route_uses_the_right_lock_and_authorization() -> None:
     assert ("POST", "/api/jobs/external/fetch-multi") in seen
     assert ("POST", "/api/jobs/ingest") in seen
     assert ("GET", "/api/jobs/search") in seen
+    assert ("GET", "/api/jobs/duplicates") in seen
 
 
 def test_admin_read_dependency_takes_shared_lock_and_requires_admin(recorded_locks) -> None:
