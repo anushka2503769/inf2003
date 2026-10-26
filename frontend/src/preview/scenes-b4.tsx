@@ -14,7 +14,7 @@ import type { PreviewScene } from './types'
 /*
  * Preview scenes for Skill Gap and Profile (redesign B4). Dev-only: the
  * harness is lazily imported behind import.meta.env.DEV, so none of this
- * reaches `npm run build`. Data mirrors the hand-off (scratchpad design/src).
+ * reaches `npm run build`. Data mirrors the design hand-off (docs/design).
  */
 
 const GROUP = 'B4 Skill Gap + Profile'
