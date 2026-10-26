@@ -1,137 +1,349 @@
-.vault__header {
+/*
+ * Vault (redesign B3, "The Notebook"). Desktop: underlined status tabs and a
+ * four-column table. Mobile (< 768px): a "Show" dropdown and one card per
+ * posting. Colours, type and spacing come from tokens.css; the column widths
+ * (170 / 112 / 196) are the hand-off's table grid.
+ */
+
+.vault {
   display: flex;
-  align-items: end;
-  justify-content: space-between;
-  gap: 1rem;
+  flex-direction: column;
+  gap: var(--space-5);
+  min-width: 0;
 }
 
-.vault__tabs {
+/* The tabs and the "Show" dropdown toggle with [hidden]; author display rules must not win. */
+.vault [hidden] {
+  display: none !important;
+}
+
+.vault .vault__head {
   display: flex;
-  gap: 0.25rem;
-  overflow-x: auto;
-  border-bottom: 1px solid var(--rule);
+  flex-direction: column;
+  gap: var(--space-2);
 }
 
-.vault__tab {
-  flex: 0 0 auto;
-  border: 0;
-  border-bottom: 3px solid transparent;
-  padding: 0.65rem 0.75rem;
-  background: transparent;
-  color: var(--ink-soft);
-  font: inherit;
-  cursor: pointer;
+/* ------------------------------------------------------------------ mobile status dropdown */
+.vault .vault__show .field {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: var(--space-3);
 }
 
-.vault__tab span {
-  margin-left: 0.25rem;
-  color: var(--ink-soft);
-  font-variant-numeric: tabular-nums;
+/* ------------------------------------------------------------------ table */
+.vault .vault__panel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+  min-width: 0;
 }
 
-.vault__tab--active {
-  border-bottom-color: var(--ballpoint);
-  color: var(--ink);
-  font-weight: 700;
+.vault .vault__panel:focus-visible {
+  outline-offset: var(--space-1);
 }
 
-.vault__list {
+.vault .vault__table {
+  --vault-columns: minmax(0, 1fr) 170px 112px 196px;
+  --row-columns: var(--vault-columns);
+}
+
+.vault .vault__table-head {
+  display: grid;
+  grid-template-columns: var(--vault-columns);
+  gap: var(--space-4);
+  padding: 0 var(--space-3) var(--space-2);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.vault .vault__table-head-actions {
+  text-align: right;
+}
+
+.vault .vault__list {
   list-style: none;
   margin: 0;
   padding: 0;
 }
 
-.vault__row {
+.vault .vault__row {
+  grid-template-columns: var(--vault-columns);
+}
+
+.vault .vault__row:hover:not(.vault__row--confirm, .vault__row--failed, .vault__row--skeleton) {
+  background: var(--color-sidebar);
+}
+
+.vault .vault__row--failed {
+  background: var(--color-danger-soft);
+}
+
+.vault .vault__posting {
   display: flex;
-  justify-content: space-between;
-  gap: 1.25rem;
-  padding: 1rem 0;
-  border-bottom: 1px solid var(--rule);
+  flex-direction: column;
+  gap: var(--space-hair);
+  min-width: 0;
 }
 
-.vault__details > * + * {
-  margin-top: 0.25rem;
+.vault .vault__title {
+  font-size: var(--text-md);
+  line-height: var(--leading-md);
+  font-weight: var(--weight-medium);
+  color: var(--color-ink);
 }
 
-.vault__details > p:first-of-type {
-  color: var(--ink-soft);
+.vault .vault__row--inactive .vault__posting .vault__title {
+  color: var(--color-ink-2);
 }
 
-.vault__actions {
-  display: flex;
-  align-items: center;
-  justify-content: end;
-  flex-wrap: wrap;
-  gap: 0.75rem;
+/* Always bordered (decision for B3), so it reads as a control before hover. */
+.vault .vault__select {
+  width: 100%;
 }
 
-.vault__status-label {
+.vault .vault__updated {
+  font-variant-numeric: tabular-nums;
+}
+
+/* "Updated" is read out on desktop (the column header is aria-hidden) and shown on mobile. */
+.vault .vault__updated-label {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+.vault .vault__actions {
+  gap: var(--space-3);
+}
+
+.vault .vault__open,
+.vault .vault__closed {
+  white-space: nowrap;
+}
+
+/* ------------------------------------------------------------------ remove confirmation */
+.vault .vault__row--confirm {
+  display: block;
+}
+
+.vault .vault__confirm {
   display: grid;
-  gap: 0.2rem;
-  color: var(--ink-soft);
-  font-size: var(--step-1);
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--space-4);
 }
 
-.vault__status-label select {
-  max-width: 11rem;
-  border: 1px solid var(--rule);
-  border-radius: 2px;
-  padding: 0.4rem;
-  background: var(--card);
-  color: var(--ink);
-  font: inherit;
+.vault .vault__confirm-text {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-hair);
+  min-width: 0;
 }
 
-.vault__empty {
-  padding: 2rem 0;
-  border-bottom: 1px solid var(--rule);
+.vault .vault__confirm-title {
+  font-weight: var(--weight-medium);
+  color: var(--color-ink);
 }
 
-.vault__empty > * + * {
-  margin-top: 0.5rem;
+.vault .vault__title--inline {
+  display: inline;
 }
 
-.vault__error {
-  color: var(--stamp);
+/* ------------------------------------------------------------------ loading */
+.vault .vault__row--skeleton {
+  pointer-events: none;
 }
 
-.vault__notice {
-  color: var(--ink-soft);
+.vault .vault__skel-title {
+  height: var(--space-3);
+  margin-bottom: var(--space-1);
 }
 
-.vault__pagination {
+.vault .vault__skel-sub {
+  width: 26%;
+  height: var(--space-3);
+}
+
+.vault .vault__skel-select {
+  width: calc(var(--space-9) + var(--space-5));
+  height: calc(var(--space-6) - var(--space-1));
+}
+
+.vault .vault__skel-date {
+  width: calc(var(--space-8) + var(--space-4));
+  height: var(--space-3);
+}
+
+.vault .vault__skel-actions {
+  width: calc(var(--space-9) + var(--space-3));
+  height: var(--space-3);
+  justify-self: end;
+}
+
+/* ------------------------------------------------------------------ pager */
+.vault .vault__pager {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 1rem;
+  gap: var(--space-4);
+  padding-top: var(--space-2);
 }
 
-@media (max-width: 42rem) {
-  .vault__header,
-  .vault__row {
-    align-items: flex-start;
-    flex-direction: column;
-  }
-
-  .vault__actions {
-    justify-content: flex-start;
-  }
+.vault .vault__pager .mono {
+  color: var(--color-ink-2);
 }
 
-.vault__confirm {
+.vault .vault__pager-buttons {
   display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 0.5rem;
-  padding: 0.5rem;
-  border: 1px solid var(--stamp);
+  gap: var(--space-2);
 }
 
-.vault__inactive {
-  display: inline-block;
-  border: 1px solid var(--stamp);
-  padding: 0.05rem 0.35rem;
-  color: var(--stamp);
-  font-size: var(--step-1);
-  font-weight: 600;
+/* ------------------------------------------------------------------ mobile: one card per posting */
+@media (max-width: 767.98px) {
+  .vault,
+  .vault .vault__panel {
+    gap: var(--space-4);
+  }
+
+  .vault .vault__title-page {
+    font-size: var(--text-2xl);
+    line-height: var(--leading-2xl);
+    letter-spacing: -0.01em;
+  }
+
+  .vault .vault__lede,
+  .vault .vault__table-head {
+    display: none;
+  }
+
+  .vault .vault__table,
+  .vault .vault__list {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-4);
+  }
+
+  .vault .vault__row {
+    grid-template-columns: auto minmax(0, 1fr);
+    grid-template-areas:
+      'posting posting'
+      'status actions'
+      'updated updated';
+    gap: var(--space-3) var(--space-2);
+    padding: var(--space-4);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-lg);
+    min-height: 0;
+  }
+
+  .vault .vault__row:hover:not(.vault__row--confirm, .vault__row--failed, .vault__row--skeleton) {
+    background: transparent;
+  }
+
+  .vault .vault__posting {
+    grid-area: posting;
+  }
+
+  .vault .vault__status {
+    grid-area: status;
+  }
+
+  .vault .vault__updated {
+    grid-area: updated;
+  }
+
+  .vault .vault__actions {
+    grid-area: actions;
+    gap: var(--space-2);
+  }
+
+  .vault .vault__select {
+    width: auto;
+    min-width: var(--space-9);
+  }
+
+  .vault .vault__updated-label {
+    position: static;
+    width: auto;
+    height: auto;
+    margin: 0;
+    overflow: visible;
+    clip: auto;
+  }
+
+  /* The posting link becomes a 44px bordered icon button; its text stays the accessible name. */
+  .vault .vault__open {
+    justify-content: center;
+    width: var(--touch-min);
+    height: var(--touch-min);
+    border: 1px solid var(--color-border-strong);
+    border-radius: var(--radius-md);
+    color: var(--color-ink);
+    text-decoration: none;
+  }
+
+  .vault .vault__open .icon {
+    width: var(--space-5);
+    height: var(--space-5);
+  }
+
+  .vault .vault__open-text {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
+  }
+
+  .vault .vault__row--confirm {
+    border-color: transparent;
+  }
+
+  .vault .vault__confirm {
+    grid-template-columns: minmax(0, 1fr);
+    gap: var(--space-3);
+  }
+
+  .vault .vault__confirm-actions {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: var(--space-2);
+  }
+
+  /* Cancel reads as a bordered button on the tinted mobile card. */
+  .vault .vault__confirm-actions .btn--ghost:not(:disabled) {
+    background: var(--color-canvas);
+    color: var(--color-ink);
+    border-color: var(--color-border-strong);
+  }
+
+  .vault .vault__row--skeleton {
+    grid-template-areas: none;
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .vault .vault__row--skeleton > * {
+    grid-area: auto;
+  }
+
+  .vault .vault__skel-date,
+  .vault .vault__skel-actions {
+    display: none;
+  }
+
+  .vault .vault__range-word {
+    display: none;
+  }
+
+  .vault .vault__pager-buttons .btn {
+    padding: 0 var(--control-pad-lg);
+    font-size: var(--text-lg);
+    line-height: var(--leading-lg);
+  }
 }

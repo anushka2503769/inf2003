@@ -21,6 +21,6 @@ export const HOME_ROUTE: RoutePath = routes.discover
 export const NAVIGATION: ReadonlyArray<{ to: RoutePath; label: string }> = [
   { to: routes.discover, label: 'Discover' },
   { to: routes.vault, label: 'Vault' },
-  { to: routes.skillGap, label: 'Skill gap' },
+  { to: routes.skillGap, label: 'Skill Gap' },
   { to: routes.profile, label: 'Profile' },
 ]

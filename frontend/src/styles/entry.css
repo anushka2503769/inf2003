@@ -1,0 +1,275 @@
+/*
+ * Full-page screens outside the app shell: sign-in, onboarding, and the shared
+ * loading / failure / 404 states.
+ */
+
+/* ------------------------------------------------------------------ centred page */
+.center-page {
+  min-height: 100vh;
+  min-height: 100dvh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-8);
+}
+
+.center-page__status {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-4);
+}
+
+/* ------------------------------------------------------------------ sign-in */
+.signin {
+  min-height: 100vh;
+  min-height: 100dvh;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+}
+
+.signin__left {
+  padding: var(--space-8) var(--space-9);
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: var(--space-7);
+}
+
+.signin__brand {
+  align-self: flex-start;
+}
+
+.signin__pitch {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+  max-width: 480px;
+}
+
+.signin__copy {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+}
+
+.signin__action {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  margin-top: var(--space-2);
+}
+
+.signin__right {
+  background: var(--color-sidebar);
+  border-left: 1px solid var(--color-border);
+  padding: var(--space-8);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Decorative preview of the product (aria-hidden). */
+.signin-preview {
+  width: 440px;
+  max-width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.signin-preview .card {
+  box-shadow: var(--shadow-1);
+}
+
+.signin-preview__lead {
+  padding: var(--space-5);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.signin-preview__badges {
+  display: flex;
+  gap: var(--space-2);
+}
+
+.signin-preview__match {
+  border-top: 1px solid var(--color-border);
+  margin-top: var(--space-1);
+  padding-top: var(--space-4);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.signin-preview__match-title {
+  font-weight: var(--weight-semibold);
+}
+
+.signin-preview__row {
+  padding: var(--space-4) var(--space-5);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--space-4);
+}
+
+.signin-preview__row-title {
+  display: block;
+  font-weight: var(--weight-medium);
+}
+
+.signin-preview__row--2 {
+  opacity: 0.72;
+}
+
+.signin-preview__row--3 {
+  opacity: 0.45;
+}
+
+.signin-preview .meter {
+  width: 96px;
+}
+
+.dot-sep {
+  color: var(--color-ink-3);
+}
+
+/* Shown only when the Supabase variables are missing on a developer machine. */
+.setup {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-4);
+  background: var(--color-info-soft);
+  border-radius: var(--radius-md);
+}
+
+.setup__title {
+  font-size: var(--text-md);
+  line-height: var(--leading-md);
+  font-weight: var(--weight-semibold);
+}
+
+.setup__list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+/* ------------------------------------------------------------------ onboarding */
+.onb {
+  width: 440px;
+  max-width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+}
+
+.onb__brand {
+  align-self: flex-start;
+  margin-bottom: var(--space-5);
+}
+
+.onb__step {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.onb__intro {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.onb__form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+}
+
+.onb__actions {
+  display: flex;
+  gap: var(--space-2);
+  align-items: center;
+  justify-content: space-between;
+}
+
+/* ------------------------------------------------------------------ narrow screens */
+@media (max-width: 1100px) {
+  .signin__left {
+    padding: var(--space-8) var(--space-7);
+  }
+}
+
+@media (max-width: 767.98px) {
+  .center-page {
+    align-items: flex-start;
+    padding: var(--space-7) var(--space-4) var(--space-6);
+  }
+
+  .center-page--status {
+    align-items: center;
+  }
+
+  .signin {
+    grid-template-columns: 1fr;
+  }
+
+  .signin__right {
+    display: none;
+  }
+
+  /* Mobile: brand on top, pitch in the middle, the button within thumb reach. */
+  .signin__left {
+    padding: var(--space-7) var(--space-4) var(--space-5);
+    gap: 0;
+  }
+
+  .signin__pitch {
+    display: contents;
+  }
+
+  .signin__copy {
+    gap: var(--space-4);
+    margin: auto 0;
+    padding: var(--space-7) 0;
+  }
+
+  .signin__copy .t-display {
+    font-size: var(--text-3xl);
+    line-height: 40px;
+  }
+
+  .signin__action {
+    margin-top: 0;
+  }
+
+  .signin__tagline {
+    margin-top: var(--space-3);
+  }
+
+  .onb {
+    gap: var(--space-5);
+  }
+
+  .onb__brand {
+    margin-bottom: 0;
+  }
+
+  .onb .t-title {
+    font-size: var(--text-2xl);
+    line-height: var(--leading-2xl);
+  }
+
+  .onb__actions {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .onb__actions .btn--primary {
+    width: 100%;
+  }
+}

@@ -93,3 +93,18 @@ task/PR, integration checks and next milestone notes here without duplicating ev
 - The route-wiring test's known exception is removed; it now asserts the duplicates GET is
   covered and fails on the old dependency.
 - Checks: ruff and format clean; pytest `58 passed, 39 skipped`; disposable DB `97 passed`.
+
+### Redesign B1: Foundation (2026-10-26)
+
+- Branch: `feat/redesign-b1-foundation`. Design: "The Notebook" (Figma
+  `wahBUi8w3scqzkMs765Pmv`); map of tokens, components and the preview harness in
+  `docs/design/README.md`.
+- Done: tokens, self-hosted fonts (OFL) and Phosphor icons (MIT); Button, TextField, Select,
+  Tabs, Badge, Chip, Meter, Card, Row, InlineError, Notice, EmptyState; new app shell (sidebar,
+  mobile top bar + tab bar, account menu, skip link); Sign-in (with the cancelled state), Auth
+  callback, Onboarding name step, 404, full-page loading and failure. Old global classes are
+  restyled so Discover, Vault, Skill Gap and Profile stay coherent until B2-B4.
+- Dev-only `/__preview` harness (not in the build) for screenshots without Supabase.
+- Checks: vitest `11 files / 112 tests passed`; `npm run build` passes.
+- Follow-ups outside B1's file list: `app/guards.tsx` (Sign out on "profile did not load"),
+  `app/routes.ts` ("Skill Gap" capitalisation), `index.html` (drop the old Google Fonts link).

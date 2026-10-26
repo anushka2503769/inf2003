@@ -1,8 +1,11 @@
 import { useId, type ChangeEvent } from 'react'
 
+import { Icon, type IconName } from './Icon'
+
 /**
- * The app's one input treatment: a label, a value written on a rule, and a
- * single line of help or correction underneath.
+ * The app's text input: a label above, a boxed field, and one line of help or
+ * correction underneath. Errors are announced (role="alert") and linked to the
+ * input with aria-describedby.
  */
 export function TextField({
   label,
@@ -15,6 +18,8 @@ export function TextField({
   disabled,
   maxLength,
   placeholder,
+  size = 'md',
+  icon,
 }: {
   label: string
   value: string
@@ -26,38 +31,54 @@ export function TextField({
   disabled?: boolean
   maxLength?: number
   placeholder?: string
+  /** 'lg' is the 44px field used on entry screens and on mobile. */
+  size?: 'md' | 'lg'
+  /** Leading glyph inside the field, e.g. "magnifying-glass" for search. */
+  icon?: IconName
 }) {
   const id = useId()
   const messageId = `${id}-message`
   const message = error ?? hint
+
+  const inputClass = [
+    'field__input',
+    size === 'lg' ? 'field__input--lg' : '',
+    error ? 'field__input--invalid' : '',
+  ]
+    .filter(Boolean)
+    .join(' ')
 
   return (
     <div className="field">
       <label className="field__label" htmlFor={id}>
         {label}
       </label>
-      <input
-        id={id}
-        className={error ? 'field__input field__input--invalid' : 'field__input'}
-        type="text"
-        value={value}
-        onChange={(event: ChangeEvent<HTMLInputElement>) => onChange(event.target.value)}
-        aria-invalid={error ? true : undefined}
-        aria-describedby={message ? messageId : undefined}
-        autoComplete={autoComplete}
-        autoFocus={autoFocus}
-        disabled={disabled}
-        maxLength={maxLength}
-        placeholder={placeholder}
-        spellCheck={false}
-      />
+      <div className="field__control">
+        {icon ? <Icon name={icon} /> : null}
+        <input
+          id={id}
+          className={inputClass}
+          type="text"
+          value={value}
+          onChange={(event: ChangeEvent<HTMLInputElement>) => onChange(event.target.value)}
+          aria-invalid={error ? true : undefined}
+          aria-describedby={message ? messageId : undefined}
+          autoComplete={autoComplete}
+          autoFocus={autoFocus}
+          disabled={disabled}
+          maxLength={maxLength}
+          placeholder={placeholder}
+          spellCheck={false}
+        />
+      </div>
       {message ? (
         <p
           id={messageId}
           className={error ? 'field__message field__message--error' : 'field__message'}
           role={error ? 'alert' : undefined}
         >
-          {message}
+          {error ? <Icon name="warning-circle" /> : null}
+          <span>{message}</span>
         </p>
       ) : null}
     </div>
