@@ -1,4 +1,5 @@
 from datetime import datetime, timezone
+from uuid import UUID
 
 from fastapi import APIRouter, File, HTTPException, UploadFile
 from pymongo.errors import WriteError
@@ -6,18 +7,45 @@ from pymongo.errors import WriteError
 from .auth import CurrentUser
 from .dependencies import AuthenticatedDatabase
 from .document_access import replace_current_resume
+from .errors import ApiError
 from .resume_extraction import (
     extract_raw_text,
     extract_structured_fields,
     resolve_file_kind,
 )
-from .schemas import ExtractedData, ResumeUploadResponse
-from .skills_repository import SkillsRepositoryError
+from .schemas import ExtractedData, ResumeUploadResponse, Skill
+from .skills_repository import SkillsRepositoryError, get_all_skills
 from .sql_access import SqlAccessError, SqlParentMissing, ensure_sql_user_exists
+from .sql_skills import confirmed_skills
 
 router = APIRouter(prefix="/api/resumes", tags=["resumes"])
 
 MAX_FILE_SIZE_BYTES = 5 * 1024 * 1024  # 5 MB
+
+
+def suggest_skills(extracted_names: list[str], user_id: UUID) -> list[Skill]:
+    """Map extracted skill names to dictionary entries the caller has not confirmed.
+
+    Matching is case-insensitive on the exact name. Unknown names are dropped,
+    duplicates collapse to one entry, and the result is ordered by name.
+    Nothing is saved: the client confirms each suggestion with PUT /api/me/skills/{id}.
+    """
+    try:
+        dictionary = get_all_skills()
+        confirmed_ids = {skill.skill_id for skill in confirmed_skills(user_id)}
+    except SkillsRepositoryError as exc:
+        raise ApiError(503, "service_unavailable", "SQL skills dictionary is unavailable.") from exc
+
+    by_name: dict[str, Skill] = {}
+    for skill_id, name in sorted(dictionary):
+        by_name.setdefault(name.casefold(), Skill(skill_id=skill_id, name=name))
+
+    suggestions: dict[int, Skill] = {}
+    for extracted in extracted_names:
+        match = by_name.get(str(extracted).strip().casefold())
+        if match is not None and match.skill_id not in confirmed_ids:
+            suggestions[match.skill_id] = match
+    return sorted(suggestions.values(), key=lambda skill: (skill.name.casefold(), skill.skill_id))
 
 
 @router.post("/upload", response_model=ResumeUploadResponse)
@@ -40,6 +68,21 @@ async def upload_resume(
     if len(file_bytes) > MAX_FILE_SIZE_BYTES:
         raise HTTPException(status_code=413, detail="File exceeds 5 MB limit.")
 
+    user_id = str(user.user_id)
+    try:
+        ensure_sql_user_exists(user_id)
+    except SqlParentMissing as exc:
+        raise ApiError(
+            404,
+            "not_found",
+            "Complete your profile before uploading a resume.",
+            {"resource": "profile"},
+        ) from exc
+    except SqlAccessError as exc:
+        raise ApiError(
+            503, "service_unavailable", "SQL profile validation is unavailable."
+        ) from exc
+
     try:
         raw_text = extract_raw_text(file_bytes, file_kind)
     except Exception as exc:
@@ -51,22 +94,11 @@ async def upload_resume(
     try:
         extracted_data = extract_structured_fields(raw_text)
     except SkillsRepositoryError as exc:
-        raise HTTPException(
-            status_code=503, detail="SQL skills dictionary is unavailable."
-        ) from exc
+        raise ApiError(503, "service_unavailable", "SQL skills dictionary is unavailable.") from exc
+    # Suggestions come from SQL, so compute them before touching MongoDB: if SQL
+    # is down the upload fails as a whole and the previous resume stays in place.
+    suggested = suggest_skills(extracted_data.get("skills", []), user.user_id)
     uploaded_at = datetime.now(timezone.utc)
-
-    user_id = str(user.user_id)
-    try:
-        ensure_sql_user_exists(user_id)
-    except SqlParentMissing as exc:
-        raise HTTPException(
-            status_code=404, detail="Complete your profile before uploading a resume."
-        ) from exc
-    except SqlAccessError as exc:
-        raise HTTPException(
-            status_code=503, detail="SQL profile validation is unavailable."
-        ) from exc
 
     document = {
         "user_id": user_id,
@@ -88,4 +120,5 @@ async def upload_resume(
         file_name=stored["file_name"],
         uploaded_at=stored["uploaded_at"],
         extracted_data=ExtractedData(**stored["extracted_data"]),
+        suggested_skills=suggested,
     )

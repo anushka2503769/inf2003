@@ -1,23 +1,37 @@
-import { useEffect, useState, type FormEvent } from 'react'
+import { useCallback, useEffect, useState, type FormEvent } from 'react'
 
 import { useProfile } from '../auth/useProfile'
 import { useSession } from '../auth/useSession'
 import { Button } from '../components/Button'
 import { InlineError } from '../components/Feedback'
-import { Icon } from '../components/Icon'
 import { TextField } from '../components/TextField'
+import { loadProfile, profileSkillsClient, resumeClient as defaultResumeClient, type ResumeClient } from '../features/resume/client'
+import { ResumeSection } from '../features/resume/ResumeSection'
+import type { SkillsClient } from '../features/skills/client'
 import '../features/skills/profile-screen.css'
 import { toDisplayMessage } from '../lib/api-client'
+import type { MeResponse, UserSkill } from '../types/api'
 import { FULL_NAME_MAX_LENGTH, normaliseFullName, validateFullName } from '../lib/validation'
 
-export function ProfileScreen() {
+export interface ProfileScreenProps {
+  /** Overrides for tests and the design preview; the app uses the data-source defaults. */
+  resumeClient?: ResumeClient
+  skillsClient?: SkillsClient
+  load?: () => Promise<MeResponse>
+}
+
+export function ProfileScreen({
+  resumeClient = defaultResumeClient,
+  skillsClient = profileSkillsClient,
+  load = loadProfile,
+}: ProfileScreenProps = {}) {
   const { identity, signOut } = useSession()
 
   return (
     <div className="profile">
       <header className="page-head">
         <h1 className="page-head__title">Profile</h1>
-        <p className="page-head__lede">Your name and account. Your resume and skills will live here too.</p>
+        <p className="page-head__lede">Your name, resume, skills and account.</p>
       </header>
 
       <NameEditor />
@@ -30,13 +44,7 @@ export function ProfileScreen() {
             Those confirmed skills are what Discover matches jobs against.
           </p>
         </div>
-        <div className="profile__placeholder">
-          <Icon name="file-text" size="lg" />
-          <p>
-            <strong>Not built yet.</strong>{' '}
-            <span className="muted">Resume upload and skill confirmation arrive in a later update.</span>
-          </p>
-        </div>
+        <ResumeAndSkills client={resumeClient} skillsClient={skillsClient} load={load} />
       </section>
 
       <section className="profile__section" aria-labelledby="profile-account-heading">
@@ -159,5 +167,59 @@ function NameEditor() {
         {failure ? <InlineError>{failure}</InlineError> : null}
       </form>
     </section>
+  )
+}
+
+/**
+ * Loads the confirmed skills for the section below. The skills come from the
+ * same GET /api/me the app shell uses; this screen keeps its own copy so a
+ * confirm can refresh them without reloading the whole shell.
+ */
+function ResumeAndSkills({
+  client,
+  skillsClient,
+  load,
+}: {
+  client: ResumeClient
+  skillsClient: SkillsClient
+  load: () => Promise<MeResponse>
+}) {
+  const [skills, setSkills] = useState<UserSkill[] | null>(null)
+  const [failure, setFailure] = useState<string | null>(null)
+
+  const reload = useCallback(async () => {
+    const result = await load()
+    setSkills(result.skills)
+  }, [load])
+
+  const firstLoad = useCallback(async () => {
+    setFailure(null)
+    try {
+      await reload()
+    } catch (cause: unknown) {
+      setFailure(toDisplayMessage(cause))
+    }
+  }, [reload])
+
+  useEffect(() => {
+    void firstLoad()
+  }, [firstLoad])
+
+  if (failure !== null) {
+    return (
+      <InlineError actionLabel="Retry" onAction={() => void firstLoad()}>
+        {failure}
+      </InlineError>
+    )
+  }
+  if (skills === null) {
+    return (
+      <p className="muted" role="status">
+        Loading your skills…
+      </p>
+    )
+  }
+  return (
+    <ResumeSection confirmedSkills={skills} onProfileReload={reload} client={client} skillsClient={skillsClient} />
   )
 }

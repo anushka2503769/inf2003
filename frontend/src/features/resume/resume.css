@@ -1,0 +1,157 @@
+/*
+ * Resume and skills on the Profile screen ("The Notebook"). Scoped under
+ * .resume; every value reads from src/styles/tokens.css.
+ */
+
+.resume {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+}
+
+.resume__upload {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: var(--space-3) var(--space-4);
+  padding: var(--space-4) var(--space-5);
+  border: var(--border-width-strong) dashed var(--color-border-strong);
+  border-radius: var(--radius-lg);
+}
+
+.resume__current {
+  min-width: 0;
+  flex: 1 1 16rem;
+}
+
+.resume__status {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.resume__file {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-1) var(--space-3);
+}
+
+.resume__file > .icon {
+  flex: none;
+  color: var(--color-ink-3);
+}
+
+.resume__file-name {
+  min-width: 0;
+  font-weight: var(--weight-medium);
+  color: var(--color-ink);
+  overflow-wrap: anywhere;
+}
+
+.resume__suggest {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.resume__subheading {
+  font-size: var(--text-lg);
+  line-height: var(--leading-lg);
+  font-weight: var(--weight-semibold);
+}
+
+.resume__list {
+  display: flex;
+  flex-direction: column;
+  max-width: 32.5rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+}
+
+.resume__item {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: var(--space-2) var(--space-3);
+  min-height: 44px;
+  padding: var(--space-1) var(--space-3);
+}
+
+.resume__item + .resume__item {
+  border-top: 1px solid var(--color-border);
+}
+
+.resume__item .checkbox {
+  position: relative;
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 40px;
+}
+
+/* A real checkbox under the drawn box, so keyboard and screen readers work natively. */
+.resume__check {
+  position: absolute;
+  left: 0;
+  top: 50%;
+  width: 18px;
+  height: 18px;
+  margin: 0;
+  transform: translateY(-50%);
+  opacity: 0;
+  cursor: inherit;
+}
+
+.resume__check:focus-visible + .checkbox__box {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
+}
+
+.resume__check:disabled + .checkbox__box {
+  opacity: 0.6;
+}
+
+.resume__name {
+  font-weight: var(--weight-medium);
+  overflow-wrap: anywhere;
+}
+
+.resume__failed {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+}
+
+@media (max-width: 767.98px) {
+  .resume {
+    gap: var(--space-4);
+  }
+
+  .resume__upload {
+    flex-direction: column;
+    align-items: stretch;
+    padding: var(--space-4);
+  }
+
+  .resume__upload .resume__current {
+    flex: 0 0 auto;
+  }
+
+  .resume__upload .btn {
+    width: 100%;
+  }
+
+  .resume__list {
+    max-width: none;
+  }
+
+  .resume__item {
+    min-height: var(--touch-min);
+  }
+}

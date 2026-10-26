@@ -246,3 +246,16 @@ sign-in configured first.
   Doc only; no code change. Covered by `test_q_wildcards_are_literal` and `test_filters[*]`.
 - At integration, after WP-0 merges: switch Discover's `job_pipeline_lock()` to
   `job_read_lock()` (same lock, clearer name).
+
+### WP-6 progress note (2026-10-26)
+
+- Branch: `feat/wp6-resume-skills`. Commit: `3b21a0e` (merged with dev in `fc9fbc6`).
+- Backend: upload now checks the profile (404 `not_found`, `details.resource` "profile") before text or skill
+  extraction; the response carries `suggested_skills` (case-insensitive exact name to dictionary id, minus
+  confirmed skills, no duplicates, ordered by name, unknown names dropped). New `GET /api/me/resume`
+  (404 resource "resume") lives on a second router `me_router` in `resumes_read.py` because the existing
+  router's prefix is `/api/resumes`; one `include_router` line added to `main.py`. API.md "new" markers removed.
+- Tests: `backend/tests/test_resume_suggestions.py` (fakes for Mongo and SQL). Checks: ruff check and format pass;
+  `pytest` 174 passed, 116 skipped; `run_disposable_db_tests.sh` 290 passed.
+- Unverified: not run against Supabase or a real MongoDB; no new SQL was added.
+- Open questions: 415/413 are still answered before the profile check (cheap request validation first).

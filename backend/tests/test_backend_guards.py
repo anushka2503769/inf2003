@@ -1,10 +1,12 @@
 """Offline regression tests for backend security and storage boundaries."""
 
 from datetime import UTC, datetime
+from typing import Any
 from uuid import UUID
 
 import pytest
 from fastapi import HTTPException
+from pymongo import ReturnDocument
 
 from app import db, skills_repository
 from app.auth import AuthenticatedUser
@@ -38,21 +40,21 @@ def test_skill_lookup_has_no_static_fallback(monkeypatch: pytest.MonkeyPatch) ->
         skills_repository.get_all_skills(force_refresh=True)
 
 
-class _ReplaceResult:
-    upserted_id = "generated-id"
-
-
 class _ResumeCollection:
     def __init__(self) -> None:
         self.filter = None
         self.document = None
         self.upsert = None
+        self.return_document = None
 
-    def replace_one(self, filter_: dict, document: dict, *, upsert: bool) -> _ReplaceResult:
+    def find_one_and_replace(
+        self, filter_: dict, document: dict, *, upsert: bool, return_document: Any
+    ) -> dict:
         self.filter = filter_
         self.document = document
         self.upsert = upsert
-        return _ReplaceResult()
+        self.return_document = return_document
+        return {**document, "_id": "generated-id"}
 
 
 class _Database:
@@ -76,7 +78,10 @@ def test_resume_replacement_is_user_scoped_and_upserted() -> None:
     stored = replace_current_resume(_Database(collection), document)
     assert collection.filter == {"user_id": document["user_id"]}
     assert collection.upsert is True
+    # The post-image of this request's own atomic write, never a second read.
+    assert collection.return_document is ReturnDocument.AFTER
     assert stored["_id"] == "generated-id"
+    assert stored["file_name"] == "resume.pdf"
 
 
 class _ReadCollection:

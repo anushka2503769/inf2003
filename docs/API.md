@@ -84,16 +84,18 @@ ResumeResponse = {
 
 | Route | Body | Success | Errors |
 |---|---|---|---|
-| `POST /api/resumes/upload` | multipart `file` (PDF or DOCX, ≤ 5 MB) | 200 `ResumeResponse`; replaces the caller's current resume | 404 `profile` (*new: checked before extraction*), 413, 415, 422 |
-| `GET /api/me/resume` *new* | – | 200 `ResumeResponse` | 404 `resume` |
+| `POST /api/resumes/upload` | multipart `file` (PDF or DOCX, ≤ 5 MB) | 200 `ResumeResponse`; replaces the caller's current resume | 404 `profile` (checked before extraction), 413, 415, 422 |
+| `GET /api/me/resume` | – | 200 `ResumeResponse` | 404 `resume` |
 | `GET /api/resumes/{resume_id}` | – | 200 (caller's own only) | 404 |
 | `DELETE /api/resumes/{resume_id}` | – | 200 `{ resume_id, deleted: true }` | 404 |
 | `GET /api/resumes/user/{user_id}` | must equal caller | 200 list | 404 |
 | `GET /api/resumes/stats?top_n=10` | admin | 200 `{ total_resumes, top_skills: [{skill, count}] }` | 403 |
 
-`suggested_skills` (*new*): extracted skill names mapped to dictionary entries
+`suggested_skills`: extracted skill names mapped to dictionary entries
 (case-insensitive exact name), excluding skills the caller has already confirmed, ordered
-by name. Names that are not in the dictionary are dropped. Suggestions are never saved
+by name. Names that are not in the dictionary are dropped. `suggested_skills` is computed only
+by `POST /api/resumes/upload` and `GET /api/me/resume`; every other resume read returns `[]`.
+If the SQL lookup fails, the upload answers 503 `service_unavailable` and stores nothing. Suggestions are never saved
 automatically; the client confirms them with `PUT /api/me/skills/{id}`.
 
 ## 6. Tracker *(WP-2, implemented)*

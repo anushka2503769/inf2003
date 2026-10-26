@@ -89,7 +89,7 @@ export function configureApiAuth(options: {
 
 export interface RequestOptions {
   method?: 'GET' | 'POST' | 'PATCH' | 'PUT' | 'DELETE'
-  /** Serialised as JSON. Omit for GET. */
+  /** Serialised as JSON, or sent as-is when it is FormData. Omit for GET. */
   body?: unknown
   /** Caller's abort signal; combined with the internal timeout. */
   signal?: AbortSignal
@@ -155,7 +155,9 @@ export async function request<T>(path: string, options: RequestOptions = {}): Pr
     const token = await getAccessToken()
     if (token !== null) headers.Authorization = `Bearer ${token}`
   }
-  if (body !== undefined) headers['Content-Type'] = 'application/json'
+  // FormData is sent as-is: the browser sets the multipart boundary itself.
+  const isForm = body instanceof FormData
+  if (body !== undefined && !isForm) headers['Content-Type'] = 'application/json'
 
   // AbortSignal.any keeps the caller's cancellation working alongside the timeout.
   const timeout = AbortSignal.timeout(timeoutMs)
@@ -166,7 +168,7 @@ export async function request<T>(path: string, options: RequestOptions = {}): Pr
     response = await fetch(buildUrl(path, query), {
       method,
       headers,
-      body: body === undefined ? undefined : JSON.stringify(body),
+      body: body === undefined ? undefined : isForm ? body : JSON.stringify(body),
       signal: combined,
     })
   } catch (cause) {

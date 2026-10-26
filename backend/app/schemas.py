@@ -98,6 +98,7 @@ class ResumeUploadResponse(BaseModel):
     file_name: str
     uploaded_at: datetime
     extracted_data: ExtractedData
+    suggested_skills: list[Skill] = Field(default_factory=list)
 
 
 TrackerStatus = Literal["NOT_INTERESTED", "SAVED", "APPLIED", "INTERVIEW", "REJECTED", "OFFER"]
