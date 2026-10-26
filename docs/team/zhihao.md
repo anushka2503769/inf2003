@@ -108,3 +108,14 @@ task/PR, integration checks and next milestone notes here without duplicating ev
 - Checks: vitest `11 files / 112 tests passed`; `npm run build` passes.
 - Follow-ups outside B1's file list: `app/guards.tsx` (Sign out on "profile did not load"),
   `app/routes.ts` ("Skill Gap" capitalisation), `index.html` (drop the old Google Fonts link).
+
+### WP-10 progress note (2026-10-26)
+
+- Branch: `feat/wp10-benchmark`. commit: (filled in by orchestrator)
+- Added `backend/scripts/seed_synthetic.py`, `benchmark.py`, `bench_server.py`, `run_benchmark.sh`,
+  `backend/tests/test_benchmark_helpers.py`, `docs/perf/README.md` and
+  `docs/perf/results-2026-10-26.md` (output of `bash backend/scripts/run_benchmark.sh`, 5,000 and
+  50,000 jobs; measured, not estimated). No file under `backend/app/` changed.
+- The README in `docs/perf/` explains how to run and read the tables and lists the limitations.
+- Unverified: numbers vary run to run on a laptop; the commentary in the README reflects the
+  committed run only.
