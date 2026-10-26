@@ -18,7 +18,7 @@ from fastapi import APIRouter, Depends, Query, Request, status
 from ..auth import CurrentUser
 from ..errors import ApiError
 from ..schemas import DiscoverResponse, JobType, WorkArrangement
-from ..sql_access import SqlAccessError, job_pipeline_lock
+from ..sql_access import SqlAccessError, job_read_lock
 from ..sql_discover import (
     LIMIT_DEFAULT,
     LIMIT_MAX,
@@ -51,16 +51,13 @@ def _reject_unknown_parameters(request: Request) -> None:
 
 
 def hold_job_read_lock(user: CurrentUser) -> Iterator[None]:
-    """Authenticate first, then hold the job lock for the request, without Mongo.
+    """Authenticate first, then hold the shared job read lock, without Mongo.
 
-    Mirrors dependencies.get_authenticated_job_db minus get_db(). On the WP-0
-    branch job_pipeline_lock becomes an alias of the new shared job_read_lock,
-    so once WP-0 merges Discover takes the shared read lock automatically (it
-    could then call job_read_lock explicitly). Busy or unavailable maps to the
-    same 503 as the other job read routes.
+    Mirrors dependencies.get_authenticated_job_db minus get_db(). Busy or
+    unavailable maps to the same 503 as the other job read routes.
     """
     try:
-        with job_pipeline_lock():
+        with job_read_lock():
             yield
     except SqlAccessError as exc:
         raise ApiError(

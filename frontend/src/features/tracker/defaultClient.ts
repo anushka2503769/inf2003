@@ -1,5 +1,7 @@
+import { env } from '../../lib/env'
 import type { TrackerClient } from './client'
-import { createMockTrackerClient as createTrackerClient } from './mocks'
+import { createMockTrackerClient } from './mocks'
+import { createRealTrackerClient } from './realClient'
 
-// Swap this one line to createRealTrackerClient() when WP-2 is available on dev.
-export const trackerClient: TrackerClient = createTrackerClient()
+// The real API by default; VITE_DATA=mock switches to synthetic data.
+export const trackerClient: TrackerClient = env.useMockData ? createMockTrackerClient() : createRealTrackerClient()
