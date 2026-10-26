@@ -1,12 +1,14 @@
 """Small SQL boundary for cross-store parent checks and job synchronization."""
 
 from collections.abc import Iterator, Mapping
-from contextlib import contextmanager
+from contextlib import AbstractContextManager, contextmanager
+from datetime import datetime
 from typing import Any, Iterable
 from urllib.parse import urlparse
 from uuid import UUID
 
 import psycopg2
+import psycopg2.errors
 
 from .sql_db import get_pg_connection
 
@@ -22,27 +24,51 @@ class SqlParentMissing(SqlAccessError):
 _JOB_PIPELINE_LOCK_KEY = 2003001
 
 
+_LOCK_TIMEOUT_SQLSTATE = "55P03"  # lock_not_available
+
+
 @contextmanager
-def job_pipeline_lock() -> Iterator[None]:
-    """Serialize job reads and cross-store writes with a transaction lock."""
+def _job_pipeline_lock(lock_function: str) -> Iterator[None]:
+    """Hold the transaction-scoped pipeline advisory lock for the caller's block.
+
+    ``lock_function`` is one of two fixed internal names, never user input.
+    A wait longer than the 3s lock_timeout becomes a "busy" SqlAccessError.
+    """
     try:
         conn = get_pg_connection()
     except (RuntimeError, psycopg2.Error) as exc:
         raise SqlAccessError("SQL job synchronization is unavailable.") from exc
     try:
         with conn.cursor() as cursor:
-            cursor.execute("SELECT pg_try_advisory_xact_lock(%s)", (_JOB_PIPELINE_LOCK_KEY,))
-            acquired = cursor.fetchone()
-            if not acquired or not acquired[0]:
-                raise SqlAccessError("SQL job synchronization is busy; retry shortly.")
+            cursor.execute("SET LOCAL lock_timeout = '3s'")
+            cursor.execute(f"SELECT {lock_function}(%s)", (_JOB_PIPELINE_LOCK_KEY,))
         yield
     except psycopg2.Error as exc:
+        if (
+            isinstance(exc, psycopg2.errors.LockNotAvailable)
+            or getattr(exc, "pgcode", None) == _LOCK_TIMEOUT_SQLSTATE
+        ):
+            raise SqlAccessError("SQL job synchronization is busy; retry shortly.") from exc
         raise SqlAccessError("SQL job synchronization is unavailable.") from exc
     finally:
         try:
             conn.rollback()
         finally:
             conn.close()
+
+
+def job_read_lock() -> AbstractContextManager[None]:
+    """Shared lock: concurrent readers proceed together; waits behind writers."""
+    return _job_pipeline_lock("pg_advisory_xact_lock_shared")
+
+
+def job_write_lock() -> AbstractContextManager[None]:
+    """Exclusive lock for cross-store writes; excludes readers and other writers."""
+    return _job_pipeline_lock("pg_advisory_xact_lock")
+
+
+# Backwards-compatible name used by read routes: means the shared read lock.
+job_pipeline_lock = job_read_lock
 
 
 def _run_parent_check(query: str, value: str, label: str) -> None:
@@ -100,7 +126,37 @@ def _valid_url(value: Any) -> bool:
     return parsed.scheme in {"http", "https"} and bool(parsed.netloc)
 
 
+_JOB_TYPES = {"FULL_TIME", "PART_TIME", "INTERNSHIP"}
+_WORK_ARRANGEMENTS = {"ONSITE", "HYBRID", "REMOTE"}
+
+
+def _optional_choice(value: Any, allowed: set[str], label: str) -> str | None:
+    if value is None:
+        return None
+    if not isinstance(value, str) or value not in allowed:
+        raise SqlAccessError(f"Provider job has an invalid {label}.")
+    return value
+
+
+def _optional_timestamp(value: Any) -> datetime | None:
+    if value is None:
+        return None
+    if isinstance(value, datetime):
+        return value
+    try:
+        return datetime.fromisoformat(str(value))
+    except ValueError as exc:
+        raise SqlAccessError("Provider job has an invalid posted date.") from exc
+
+
 def upsert_provider_job(job: Mapping[str, Any], extracted: Mapping[str, Any]) -> UUID:
+    return upsert_provider_job_with_status(job, extracted)[0]
+
+
+def upsert_provider_job_with_status(
+    job: Mapping[str, Any], extracted: Mapping[str, Any]
+) -> tuple[UUID, bool]:
+    """Upsert one provider job; also report whether the row was inserted (else updated)."""
     source = job.get("source")
     external_id = job.get("external_job_id")
     title = job.get("title")
@@ -130,6 +186,11 @@ def upsert_provider_job(job: Mapping[str, Any], extracted: Mapping[str, Any]) ->
     application_url = application_url.strip()
     if not external_id:
         raise SqlAccessError("Provider job is missing a stable external job ID.")
+    job_type = _optional_choice(job.get("job_type"), _JOB_TYPES, "job type")
+    work_arrangement = _optional_choice(
+        job.get("work_arrangement"), _WORK_ARRANGEMENTS, "work arrangement"
+    )
+    posted_at = _optional_timestamp(job.get("source_posted_at"))
 
     try:
         conn = get_pg_connection()
@@ -140,19 +201,33 @@ def upsert_provider_job(job: Mapping[str, Any], extracted: Mapping[str, Any]) ->
             cursor.execute(
                 """
                 INSERT INTO public.jobs
-                    (source, external_job_id, title, company_name, location,
-                     application_url, last_seen_at, is_active)
-                VALUES (%s, %s, %s, %s, %s, %s, now(), false)
+                    (source, external_job_id, title, company_name, location, job_type,
+                     work_arrangement, application_url, source_posted_at,
+                     last_seen_at, is_active)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, now(), false)
                 ON CONFLICT (source, external_job_id) DO UPDATE SET
                     title = EXCLUDED.title,
                     company_name = EXCLUDED.company_name,
                     location = EXCLUDED.location,
+                    job_type = EXCLUDED.job_type,
+                    work_arrangement = EXCLUDED.work_arrangement,
                     application_url = EXCLUDED.application_url,
+                    source_posted_at = EXCLUDED.source_posted_at,
                     last_seen_at = now(),
                     is_active = false
-                RETURNING job_id
+                RETURNING job_id, (xmax = 0) AS inserted
                 """,
-                (source, external_id, title, company, job.get("location"), application_url),
+                (
+                    source,
+                    external_id,
+                    title,
+                    company,
+                    job.get("location"),
+                    job_type,
+                    work_arrangement,
+                    application_url,
+                    posted_at,
+                ),
             )
             row = cursor.fetchone()
             if row is None:
@@ -160,7 +235,7 @@ def upsert_provider_job(job: Mapping[str, Any], extracted: Mapping[str, Any]) ->
             job_id = row[0]
             _replace_job_skills(cursor, job_id, extracted.get("requirements", []))
         conn.commit()
-        return job_id
+        return job_id, bool(row[1])
     except SqlAccessError:
         conn.rollback()
         raise
@@ -198,7 +273,10 @@ def _replace_job_skills(
             INSERT INTO public.job_skills (job_id, skill_id, requirement_type)
             VALUES (%s, %s, %s)
             ON CONFLICT (job_id, skill_id) DO UPDATE
-                SET requirement_type = EXCLUDED.requirement_type
+                SET requirement_type = CASE
+                    WHEN job_skills.requirement_type = 'REQUIRED' THEN 'REQUIRED'
+                    ELSE EXCLUDED.requirement_type
+                END
             """,
             (job_id, skill_id, requirement_type),
         )

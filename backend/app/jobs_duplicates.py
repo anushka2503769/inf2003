@@ -5,7 +5,7 @@ Duplicate key priority:
 1. url (from raw_jd's JSON, if present and non-empty) - most reliable,
    since it points to the exact same posting.
 2. (title, company) pair, lowercased - fallback for documents without a
-   url (e.g. DevITjobs UK postings, which don't include one), or for
+   url (e.g. provider postings that don't include one), or for
    manually-ingested job descriptions via /api/jobs/ingest where raw_jd
    is plain text, not JSON.
 
@@ -21,7 +21,7 @@ from fastapi import APIRouter
 from pydantic import BaseModel
 from pymongo.database import Database
 
-from .dependencies import AdminJobDatabase
+from .dependencies import AdminJobDatabase, AdminJobReadDatabase
 from .errors import ApiError
 from .sql_access import get_active_job_ids
 
@@ -114,7 +114,7 @@ def _build_groups(db: Database) -> List[DuplicateGroup]:
 
 
 @router.get("/duplicates", response_model=DuplicatesPreviewResponse)
-def preview_duplicates(db: AdminJobDatabase) -> DuplicatesPreviewResponse:
+def preview_duplicates(db: AdminJobReadDatabase) -> DuplicatesPreviewResponse:
     """Preview duplicate groups WITHOUT deleting anything."""
     groups = _build_groups(db)
     total_removable = sum(len(g.removed_job_ids) for g in groups)
