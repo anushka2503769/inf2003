@@ -123,7 +123,7 @@ assumed from memory of an earlier session):
 - Result: implemented role selection, sample-size and ranked skill display, confirmation-gated add-to-skills, retry/error states, and contract-shaped mock/real clients.
 - Frontend checks: `cd frontend && npm test && npm run build` — 55 tests passed across 5 files; TypeScript and Vite production build passed.
 - Backend regression checks (run by orchestrator with DB/environment variables unset): `uv run --locked ruff check .` — All checks passed; `uv run --locked ruff format --check .` — 51 files already formatted; `uv run --locked pytest` — 51 passed, 38 skipped in 10.60s (disposable DB integration tests skipped; no shared DB or `.env` used).
-- Unverified: no live API/Supabase/Mongo integration; the active screen client intentionally uses synthetic mocks. `jarvis check` was unavailable (`zsh: command not found`); no governance files were changed.
+- Unverified: no live API/Supabase/Mongo integration; the active screen client intentionally uses synthetic mocks.
 - Open questions: none within WP-9; switching to real service is pending backend integration on `dev`.
 - Real-client switch in `frontend/src/features/skill-gap/activeClient.ts:1`: replace `import { createDefaultSkillGapClient } from './client'` with `import { createRealSkillGapClient as createDefaultSkillGapClient } from './realClient'`.
 - WP-9 follow-up review fix: successful skill adds now reconcile membership across role changes and overlay later role GET responses; regression tests `keeps a successfully added skill confirmed when the selected role also contains it` and `overlays a successful add on a role GET that resolves afterward` passed. Latest frontend check: 57 tests passed across 5 files; build passed.
