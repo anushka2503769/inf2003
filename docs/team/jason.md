@@ -186,7 +186,7 @@ sign-in configured first.
   inactive jobs still fail with 23514. Concurrent DELETE plus upsert race is documented in the
   SQL, not solved.
 - 003 was edited in place; it has not been applied to Supabase yet, so no new migration.
-- Regression tests added for the exact upsert statement; commit: (filled in by orchestrator).
+- Regression tests added for the exact upsert statement; commit: `7fa1ef6` (build) + `17939f8` (review fix round); orchestrator re-ran checks on `17939f8`: ruff clean, pytest 51 passed / 51 skipped, disposable DB 102 passed.
 
 ### WP-2 progress note (overnight 2026-10-26)
 
@@ -214,4 +214,35 @@ sign-in configured first.
 - Once WP-1's trigger fix (row-exists pass-through) merges, `PUT` could be simplified to the
   bare `INSERT ... ON CONFLICT DO UPDATE`; the CTE is correct under both trigger versions.
 - Checks: ruff check, ruff format --check pass; pytest 77 passed, 61 skipped; disposable DB 138 passed.
-- Regression tests added for the exact upsert statement; commit: `7fa1ef6` (build) + `17939f8` (review fix round); orchestrator re-ran checks on `17939f8`: ruff clean, pytest 51 passed / 51 skipped, disposable DB 102 passed.
+
+### WP-3 progress note (overnight 2026-10-26)
+
+- Branch: `feat/wp3-discover-api` (from `feat/wp1-sql-003`); commit: `94f5428` (build) + `171773a` (review fix round); orchestrator re-ran checks on `171773a`: ruff clean, pytest 78 passed / 82 skipped, disposable DB 160 passed (rebased onto WP-1 17939f8).
+- Delivered `GET /api/discover` (API §7): `backend/app/sql_discover.py` (one statement,
+  CTEs `candidate` / `req` / `ranked`, skill lists via `LEFT JOIN LATERAL` for the page only),
+  `backend/app/routers/discover.py`, models appended to `schemas.py`, one router line in
+  `main.py`, `backend/tests/test_discover.py` (fakes) and `backend/tests/test_discover_sql.py`
+  (12-job synthetic fixture, expected order written literally).
+- The route holds the job lock through its own dependency `hold_job_read_lock` in
+  `routers/discover.py`. It authenticates first, then holds `job_pipeline_lock()` without
+  opening MongoDB (Discover is SQL-only and works with `MONGODB_URI` unset); busy → 503.
+  WP-0 makes `job_pipeline_lock` an alias of the shared `job_read_lock`; after WP-0 merges
+  this could switch to `job_read_lock` explicitly.
+- Fix round (reviewer): the Mongo coupling above, and NUL characters in `q`/`location` are
+  now 422 `validation_failed` (they used to raise a plain 500 from psycopg2).
+- EXPLAIN: `docs/perf/discover-explain-fixture.txt`, regenerated with
+  `WRITE_PERF_ARTIFACTS=1 bash backend/scripts/run_disposable_db_tests.sh`; without the
+  variable the test only asserts the plan has an anti-join and a WindowAgg.
+- Checks (after fix round): ruff check, ruff format --check pass; plain `pytest` 78 passed, 78 skipped;
+  `bash backend/scripts/run_disposable_db_tests.sh` 156 passed.
+- Unverified: not run against Supabase or at WP-10 scale.
+- Open questions: `JobSummary` is also appended by WP-2; keep one copy on integration.
+  `q` is case-insensitive (ILIKE) although API §7 only says "literal substring".
+
+### WP-3 follow-up: API wording for `q` (2026-10-26)
+
+- Decided by Zhihao: keep case-insensitive `q` (ILIKE). API.md §7 now says "literal
+  case-insensitive substring of title or company", matching `location` and the code.
+  Doc only; no code change. Covered by `test_q_wildcards_are_literal` and `test_filters[*]`.
+- At integration, after WP-0 merges: switch Discover's `job_pipeline_lock()` to
+  `job_read_lock()` (same lock, clearer name).
