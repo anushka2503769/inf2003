@@ -165,3 +165,84 @@ sign-in configured first.
   overwrites an existing name), plus the `details.resource` convention; and
   `docs/DB/README.md` needs a line documenting `002`.
 - Confirm Zhihao has access to the Supabase project.
+
+### WP-1 progress note (overnight 2026-10-26)
+
+- Branch: `feat/wp1-sql-003`; commit: `7fa1ef6` (build) + `17939f8` (review fix round); orchestrator re-ran checks on `17939f8`: ruff clean, pytest 51 passed / 51 skipped, disposable DB 102 passed.
+- Delivered `docs/DB/003_views_triggers_indexes.sql`, `backend/tests/test_sql_003.py`, the
+  disposable script now applies 001 then 003 (not 002), and the erd.md "Migration 003" section.
+- Checks: `bash backend/scripts/run_disposable_db_tests.sh` -> 98 passed; ruff check, ruff
+  format --check and plain `pytest` (SQL tests skip) pass.
+- The EXPLAIN test sets `enable_seqscan = off` because the synthetic table is tiny; it proves
+  the partial indexes are usable and chosen, not that the planner picks them unaided.
+- Unverified: not run against Supabase. Human step for Jason: apply 003 to the shared
+  Supabase project and record date and commit in `docs/DB/README.md` (not edited here).
+- Open questions: none.
+
+#### WP-1 fix round
+- `user_jobs_require_active_job()` now allows the insert when a `(user_id, job_id)` row already
+  exists, because PostgreSQL fires BEFORE INSERT triggers before detecting ON CONFLICT; the
+  WP-2 upsert on an existing row of a deactivated job previously raised 23514. New rows for
+  inactive jobs still fail with 23514. Concurrent DELETE plus upsert race is documented in the
+  SQL, not solved.
+- 003 was edited in place; it has not been applied to Supabase yet, so no new migration.
+- Regression tests added for the exact upsert statement; commit: `7fa1ef6` (build) + `17939f8` (review fix round); orchestrator re-ran checks on `17939f8`: ruff clean, pytest 51 passed / 51 skipped, disposable DB 102 passed.
+
+### WP-2 progress note (overnight 2026-10-26)
+
+- Branch: `feat/wp2-tracker-api`; commit: `f8a1955` (build) + `b2584b9` (review fix round); orchestrator re-ran checks on `b2584b9`: ruff clean, pytest 77 passed / 65 skipped, disposable DB 142 passed (rebased onto WP-1 17939f8).
+- Delivered `sql_tracker.py`, `routers/tracker.py`, tracker models appended to `schemas.py`,
+  one `include_router` line (plus the router import) in `main.py`, and route + disposable-DB
+  SQL tests.
+- Checks: `bash backend/scripts/run_disposable_db_tests.sh` -> 131 passed; ruff check, ruff
+  format --check pass; plain `pytest` -> 71 passed, 60 skipped.
+- Deviation from the PRD wording: `PUT` is one statement but not a bare `INSERT ... ON CONFLICT`.
+  PostgreSQL fires the BEFORE INSERT active-job trigger before conflict detection, so a bare
+  upsert would reject updates of rows whose job went inactive. The statement is a CTE: UPDATE
+  first, INSERT ... ON CONFLICT DO UPDATE only if nothing matched.
+- `GET /api/me/jobs` and `/summary` for a user with no profile return empty/zero (no 404);
+  API.md only specifies 404 `profile` for PUT and DELETE.
+- Unverified: not run against Supabase. Human step for Jason: apply migration 003 to the shared
+  Supabase project before merging this branch (the route relies on its trigger and view).
+- Open questions: should GET list/summary return 404 `profile` when there is no profile?
+
+#### WP-2 fix round
+
+- `PUT`/`DELETE` now reject unknown query parameters (422) before touching the store.
+- A failed `PUT` is classified by the original error: user FK -> profile, job FK -> job (by
+  constraint name, pinned by a disposable-DB test); only the trigger's 23514 re-checks the profile.
+- Once WP-1's trigger fix (row-exists pass-through) merges, `PUT` could be simplified to the
+  bare `INSERT ... ON CONFLICT DO UPDATE`; the CTE is correct under both trigger versions.
+- Checks: ruff check, ruff format --check pass; pytest 77 passed, 61 skipped; disposable DB 138 passed.
+
+### WP-3 progress note (overnight 2026-10-26)
+
+- Branch: `feat/wp3-discover-api` (from `feat/wp1-sql-003`); commit: `94f5428` (build) + `171773a` (review fix round); orchestrator re-ran checks on `171773a`: ruff clean, pytest 78 passed / 82 skipped, disposable DB 160 passed (rebased onto WP-1 17939f8).
+- Delivered `GET /api/discover` (API §7): `backend/app/sql_discover.py` (one statement,
+  CTEs `candidate` / `req` / `ranked`, skill lists via `LEFT JOIN LATERAL` for the page only),
+  `backend/app/routers/discover.py`, models appended to `schemas.py`, one router line in
+  `main.py`, `backend/tests/test_discover.py` (fakes) and `backend/tests/test_discover_sql.py`
+  (12-job synthetic fixture, expected order written literally).
+- The route holds the job lock through its own dependency `hold_job_read_lock` in
+  `routers/discover.py`. It authenticates first, then holds `job_pipeline_lock()` without
+  opening MongoDB (Discover is SQL-only and works with `MONGODB_URI` unset); busy → 503.
+  WP-0 makes `job_pipeline_lock` an alias of the shared `job_read_lock`; after WP-0 merges
+  this could switch to `job_read_lock` explicitly.
+- Fix round (reviewer): the Mongo coupling above, and NUL characters in `q`/`location` are
+  now 422 `validation_failed` (they used to raise a plain 500 from psycopg2).
+- EXPLAIN: `docs/perf/discover-explain-fixture.txt`, regenerated with
+  `WRITE_PERF_ARTIFACTS=1 bash backend/scripts/run_disposable_db_tests.sh`; without the
+  variable the test only asserts the plan has an anti-join and a WindowAgg.
+- Checks (after fix round): ruff check, ruff format --check pass; plain `pytest` 78 passed, 78 skipped;
+  `bash backend/scripts/run_disposable_db_tests.sh` 156 passed.
+- Unverified: not run against Supabase or at WP-10 scale.
+- Open questions: `JobSummary` is also appended by WP-2; keep one copy on integration.
+  `q` is case-insensitive (ILIKE) although API §7 only says "literal substring".
+
+### WP-3 follow-up: API wording for `q` (2026-10-26)
+
+- Decided by Zhihao: keep case-insensitive `q` (ILIKE). API.md §7 now says "literal
+  case-insensitive substring of title or company", matching `location` and the code.
+  Doc only; no code change. Covered by `test_q_wildcards_are_literal` and `test_filters[*]`.
+- At integration, after WP-0 merges: switch Discover's `job_pipeline_lock()` to
+  `job_read_lock()` (same lock, clearer name).

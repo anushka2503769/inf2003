@@ -6,6 +6,7 @@ script_dir=$(CDPATH= cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 repo_root=$(CDPATH= cd -- "$script_dir/../.." && pwd)
 backend_dir="$repo_root/backend"
 schema_file="$repo_root/docs/DB/001_initial_schema.sql"
+views_file="$repo_root/docs/DB/003_views_triggers_indexes.sql"
 
 container_name="inf2003-postgres-test-$$-$RANDOM"
 container_id=""
@@ -153,6 +154,12 @@ docker exec --interactive "$container_name" psql \
     --username postgres \
     --dbname postgres \
     --set=ON_ERROR_STOP=1 < "$schema_file"
+
+# 002 (seed data) is deliberately not applied; 003 builds on 001 only.
+docker exec --interactive "$container_name" psql \
+    --username postgres \
+    --dbname postgres \
+    --set=ON_ERROR_STOP=1 < "$views_file"
 
 test_database_url="postgresql://postgres:postgres@127.0.0.1:${host_port}/postgres"
 test_mongodb_uri="mongodb://127.0.0.1:${mongo_host_port}/"

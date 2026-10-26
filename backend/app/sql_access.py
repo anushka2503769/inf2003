@@ -1,12 +1,13 @@
 """Small SQL boundary for cross-store parent checks and job synchronization."""
 
 from collections.abc import Iterator, Mapping
-from contextlib import contextmanager
+from contextlib import AbstractContextManager, contextmanager
 from typing import Any, Iterable
 from urllib.parse import urlparse
 from uuid import UUID
 
 import psycopg2
+import psycopg2.errors
 
 from .sql_db import get_pg_connection
 
@@ -22,27 +23,51 @@ class SqlParentMissing(SqlAccessError):
 _JOB_PIPELINE_LOCK_KEY = 2003001
 
 
+_LOCK_TIMEOUT_SQLSTATE = "55P03"  # lock_not_available
+
+
 @contextmanager
-def job_pipeline_lock() -> Iterator[None]:
-    """Serialize job reads and cross-store writes with a transaction lock."""
+def _job_pipeline_lock(lock_function: str) -> Iterator[None]:
+    """Hold the transaction-scoped pipeline advisory lock for the caller's block.
+
+    ``lock_function`` is one of two fixed internal names, never user input.
+    A wait longer than the 3s lock_timeout becomes a "busy" SqlAccessError.
+    """
     try:
         conn = get_pg_connection()
     except (RuntimeError, psycopg2.Error) as exc:
         raise SqlAccessError("SQL job synchronization is unavailable.") from exc
     try:
         with conn.cursor() as cursor:
-            cursor.execute("SELECT pg_try_advisory_xact_lock(%s)", (_JOB_PIPELINE_LOCK_KEY,))
-            acquired = cursor.fetchone()
-            if not acquired or not acquired[0]:
-                raise SqlAccessError("SQL job synchronization is busy; retry shortly.")
+            cursor.execute("SET LOCAL lock_timeout = '3s'")
+            cursor.execute(f"SELECT {lock_function}(%s)", (_JOB_PIPELINE_LOCK_KEY,))
         yield
     except psycopg2.Error as exc:
+        if (
+            isinstance(exc, psycopg2.errors.LockNotAvailable)
+            or getattr(exc, "pgcode", None) == _LOCK_TIMEOUT_SQLSTATE
+        ):
+            raise SqlAccessError("SQL job synchronization is busy; retry shortly.") from exc
         raise SqlAccessError("SQL job synchronization is unavailable.") from exc
     finally:
         try:
             conn.rollback()
         finally:
             conn.close()
+
+
+def job_read_lock() -> AbstractContextManager[None]:
+    """Shared lock: concurrent readers proceed together; waits behind writers."""
+    return _job_pipeline_lock("pg_advisory_xact_lock_shared")
+
+
+def job_write_lock() -> AbstractContextManager[None]:
+    """Exclusive lock for cross-store writes; excludes readers and other writers."""
+    return _job_pipeline_lock("pg_advisory_xact_lock")
+
+
+# Backwards-compatible name used by read routes: means the shared read lock.
+job_pipeline_lock = job_read_lock
 
 
 def _run_parent_check(query: str, value: str, label: str) -> None:
