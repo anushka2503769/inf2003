@@ -99,17 +99,22 @@ describe('VaultScreen', () => {
     expect(await screen.findByRole('heading', { name: JOB.title })).toBeInTheDocument()
   })
 
-  it('restores the previous status and row when a status update fails', async () => {
+  it('restores status and counts when a pending status update fails', async () => {
+    let rejectUpdate!: (cause: unknown) => void
     const client = fakeClient({
-      update: vi.fn(async () => {
-        throw new ApiError(503, 'service_unavailable', 'Private backend detail.')
-      }),
+      summary: vi.fn(async () => summary()),
+      update: vi.fn(() => new Promise<TrackerItem>((_resolve, reject) => { rejectUpdate = reject })),
     })
     const user = userEvent.setup()
     render(<VaultScreen client={client} />)
 
     const row = await screen.findByRole('heading', { name: JOB.title }).then(node => node.closest('li')!)
     await user.selectOptions(within(row).getByRole('combobox', { name: /status/i }), 'APPLIED')
+
+    expect(screen.getByRole('tab', { name: 'Saved 0' })).toBeInTheDocument()
+    expect(screen.getByRole('tab', { name: 'Applied 4' })).toBeInTheDocument()
+    expect(screen.getByText('No jobs in Saved yet.')).toBeInTheDocument()
+    await act(async () => rejectUpdate(new ApiError(503, 'service_unavailable', 'Private backend detail.')))
 
     expect(await screen.findByText('The server had a problem with that request. Try again in a moment.')).toBeInTheDocument()
     expect(screen.queryByText('Private backend detail.')).not.toBeInTheDocument()
@@ -138,6 +143,26 @@ describe('VaultScreen', () => {
     expect(screen.getByRole('heading', { name: JOB.title })).toBeInTheDocument()
   })
 
+  it('confirms removal in-page and removes the row after DELETE succeeds', async () => {
+    let removed = false
+    const client = fakeClient({
+      list: vi.fn(async (tabStatus) => ({ items: tabStatus === 'SAVED' && !removed ? [item()] : [], total: tabStatus === 'SAVED' && !removed ? 1 : 0 })),
+      summary: vi.fn(async () => summary({ SAVED: removed ? 0 : 1 })),
+      remove: vi.fn(async () => { removed = true }),
+    })
+    const user = userEvent.setup()
+    render(<VaultScreen client={client} />)
+
+    const row = await screen.findByRole('heading', { name: JOB.title }).then(node => node.closest('li')!)
+    await user.click(within(row).getByRole('button', { name: 'Remove' }))
+    const confirmation = screen.getByRole('group', { name: /confirm removal/i })
+    await user.click(within(confirmation).getByRole('button', { name: 'Remove' }))
+
+    expect(client.remove).toHaveBeenCalledWith(JOB.job_id)
+    await waitFor(() => expect(screen.queryByRole('heading', { name: JOB.title })).not.toBeInTheDocument())
+    expect(screen.queryByRole('group', { name: /confirm removal/i })).not.toBeInTheDocument()
+  })
+
   it('keeps the row and confirmation open when DELETE fails', async () => {
     const client = fakeClient({
       remove: vi.fn(async () => { throw new ApiError(503, 'service_unavailable', 'Private delete detail.') }),
@@ -148,7 +173,7 @@ describe('VaultScreen', () => {
     const row = await screen.findByRole('heading', { name: JOB.title }).then(node => node.closest('li')!)
     await user.click(within(row).getByRole('button', { name: 'Remove' }))
     const confirmation = screen.getByRole('group', { name: /confirm removal/i })
-    await user.click(within(confirmation).getByRole('button', { name: 'Remove job' }))
+    await user.click(within(confirmation).getByRole('button', { name: 'Remove' }))
 
     expect(await screen.findByText('The server had a problem with that request. Try again in a moment.')).toBeInTheDocument()
     expect(screen.queryByText('Private delete detail.')).not.toBeInTheDocument()
@@ -218,6 +243,10 @@ describe('VaultScreen', () => {
     expect(applied).toHaveFocus()
     expect(applied).toHaveAttribute('aria-selected', 'true')
     expect(panel).toHaveAttribute('aria-labelledby', applied.id)
+    await user.keyboard('{ArrowLeft}')
+    expect(saved).toHaveFocus()
+    expect(saved).toHaveAttribute('aria-selected', 'true')
+    expect(panel).toHaveAttribute('aria-labelledby', saved.id)
   })
 
   it('steps back and reloads the prior page when changing the only row on the last page', async () => {
@@ -259,6 +288,28 @@ describe('VaultScreen', () => {
     expect(screen.getByRole('button', { name: 'Previous page' })).toBeDisabled()
     expect(screen.getByRole('button', { name: 'Next page' })).toBeDisabled()
     await act(async () => finishUpdate())
+  })
+
+  it('disables both page controls while DELETE is pending', async () => {
+    const allRows = Array.from({ length: 42 }, (_, index) => item('SAVED', `50000000-0000-4000-8000-${String(index + 1).padStart(12, '0')}`))
+    let removed = false
+    let finishDelete!: () => void
+    const client = fakeClient({
+      list: vi.fn(async (_tabStatus, _limit, offset) => ({ items: allRows.slice(offset, offset + 20), total: removed ? 41 : 42 })),
+      remove: vi.fn(() => new Promise<void>(resolve => { finishDelete = () => { removed = true; resolve() } })),
+    })
+    const user = userEvent.setup()
+    render(<VaultScreen client={client} />)
+    await user.click(await screen.findByRole('button', { name: 'Next page' }))
+    await screen.findByRole('heading', { name: 'Job 21' })
+    const row = screen.getByRole('heading', { name: 'Job 21' }).closest('li')!
+    await user.click(within(row).getByRole('button', { name: 'Remove' }))
+    const confirmation = screen.getByRole('group', { name: /confirm removal/i })
+    await user.click(within(confirmation).getByRole('button', { name: 'Remove' }))
+
+    expect(screen.getByRole('button', { name: 'Previous page' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Next page' })).toBeDisabled()
+    await act(async () => finishDelete())
   })
 
   it('shows the empty state as soon as the active page has no visible rows', async () => {

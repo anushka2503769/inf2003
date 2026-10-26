@@ -142,3 +142,11 @@ assumed from memory of an earlier session):
 - Checks: `cd frontend && npm test` — 6 files, 70 tests passed. `cd frontend && npm run build` — TypeScript passed; Vite transformed 94 modules and built in 111ms. `git diff --check` passed.
 - Unverified: no live WP-2 backend integration or manual browser walkthrough; no network/shared database calls were made.
 - Questions: none.
+
+### WP-8 fix round final verification update (2026-10-26)
+
+- Branch: `feat/wp8-vault-ui`.
+- commit: (filled in by orchestrator)
+- Final check results after adding successful DELETE, pending DELETE navigation, two-way tab-keyboard, and pending/rollback count assertions: `cd frontend && npm test` — 6 files, 72 tests passed; `cd frontend && npm run build` — TypeScript passed, Vite transformed 94 modules and built in 129ms; `git diff --check` passed.
+- Confirmation action label is `Remove`, scoped within the accessible confirmation group.
+- Remaining unverified: live WP-2 integration and manual browser walkthrough. Questions: none.

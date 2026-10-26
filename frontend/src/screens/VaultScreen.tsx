@@ -266,7 +266,7 @@ export function VaultScreen({ client = trackerClient }: VaultScreenProps) {
                       }}>
                         <span>Remove this job from your vault?</span>
                         <button className="button button--quiet" disabled={pendingJobId !== null} onClick={() => setConfirmingId(null)} ref={cancelButton} type="button">Cancel</button>
-                        <button className="button button--quiet" disabled={pendingJobId !== null} onClick={() => void removeRow(row)} type="button">Remove job</button>
+                        <button className="button button--quiet" disabled={pendingJobId !== null} onClick={() => void removeRow(row)} type="button">Remove</button>
                       </div>
                     ) : (
                       <button
