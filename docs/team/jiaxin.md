@@ -101,3 +101,20 @@ Inspect current code before work. Append task/result/check/PR/next-step notes he
   and `test_reextraction_replaces_only_an_unknown_industry`. Each part was mutation-checked.
 - Checks: ruff and format clean; pytest `76 passed, 39 skipped`; disposable DB `115 passed`.
 - Trade-off: a stored industry other than "Unclassified" is never re-classified.
+
+### Follow-up: DevITjobs removed, shared DB Singapore-only (2026-10-26)
+
+- Decided by Zhihao. `devitjobs.uk/job_feed.xml` now redirects to a sign-up page on another
+  site, so the provider is removed (fetcher, normalizer, fixture, test). PRD §2, §4 and WP-5
+  step 3 updated.
+- **The shared database gets the LinkedIn Singapore export only.** Do not run `--sources`
+  against the shared database. Updated human step, from `backend/`:
+  `uv run --env-file .env python scripts/ingest_jobs.py --file ../data/raw/linkedin_sg_<date>.json`
+- AI Dev Jobs field names checked against 5 live records: `published_at`, `job_type`
+  (`full-time`), `workplace` and `apply_url` exist and map correctly.
+- Live keyless-provider run into throwaway Docker databases (orchestrator, 2026-10-26,
+  `--sources arbeitnow ai_dev_jobs --limit-per-source 20`): summary
+  `{"requested": 40, "inserted": 40, "updated": 0, "rejected": 0, "errors": []}`, exit 0.
+  0 of 40 jobs in Singapore (top locations San Francisco, Berlin); 2 internships; 13 with no
+  job type; 12 with role "Unclassified"; 5 with no extracted skills.
+- Checks: ruff and format clean; pytest `75 passed, 39 skipped`; disposable DB `114 passed`.
