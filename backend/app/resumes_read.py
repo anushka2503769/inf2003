@@ -13,9 +13,12 @@ from pydantic import BaseModel
 from .auth import CurrentUser
 from .dependencies import AdminDatabase, AuthenticatedDatabase
 from .document_access import section_items
+from .errors import ApiError
+from .resumes import suggest_skills
 from .schemas import ExtractedData, ResumeUploadResponse
 
 router = APIRouter(prefix="/api/resumes", tags=["resumes"])
+me_router = APIRouter(prefix="/api/me", tags=["resumes"])
 
 
 class DeleteResumeResponse(BaseModel):
@@ -46,6 +49,19 @@ def _doc_to_response(doc: dict) -> ResumeUploadResponse:
             projects=section_items(doc["extracted_data"].get("projects", [])),
         ),
     )
+
+
+@me_router.get("/resume", response_model=ResumeUploadResponse)
+def get_my_resume(user: CurrentUser, db: AuthenticatedDatabase) -> ResumeUploadResponse:
+    """The caller's current resume, with skills still waiting for confirmation."""
+    doc = db["resume_documents"].find_one({"user_id": str(user.user_id)})
+    if doc is None:
+        raise ApiError(
+            404, "not_found", "You have not uploaded a resume yet.", {"resource": "resume"}
+        )
+    response = _doc_to_response(doc)
+    response.suggested_skills = suggest_skills(response.extracted_data.skills, user.user_id)
+    return response
 
 
 @router.get("/stats", response_model=ResumeStatsResponse)

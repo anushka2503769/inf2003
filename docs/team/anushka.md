@@ -209,3 +209,17 @@ assumed from memory of an earlier session):
 - Not built (would be new behaviour): a Retry button on the failed-status error, and the
   "See your interviews" / "Go to Discover" actions on the empty tab.
 - Preview scenes: `frontend/src/preview/scenes-b3.tsx` (`/__preview/vault-*`).
+
+### WP-6 progress note (2026-10-26)
+
+- Branch: `feat/wp6-resume-skills`. Commit: (filled in by orchestrator).
+- Profile screen "Resume and skills" now has upload (PDF/DOCX up to 5 MB, checked in the browser), current file
+  name and upload time ("No resume yet" on 404), a ticked-by-default checklist of suggested skills, "Add selected"
+  (sequential `PUT /api/me/skills/{id}`, a failed one shows "Not saved" with Retry, then the profile reloads) and
+  the skill editor mounted with the real skills client. Code in `frontend/src/features/resume/`; data source chosen
+  once in `features/resume/client.ts` (`VITE_DATA=mock` gives synthetic data).
+- Preview scenes: `profile-default`, `profile-resume-uploading`, `-suggestions`, `-partial-failure`,
+  `-upload-error`, `-bad-file` in `scenes-b4.tsx`.
+- Checks: `npm test` and `npm run build` pass; dist has no preview-harness code.
+- Unverified: not run against the real backend in a browser. After review, `request()` in `lib/api-client.ts`
+  gained a FormData branch, so the upload reuses it (shared token, 401 sign-out, timeouts, error mapping).

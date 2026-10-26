@@ -6,9 +6,12 @@ import { routes } from '../app/routes'
 import type { SkillGapClient, SkillGapResponse, SkillGapRole, SkillGapRow } from '../features/skill-gap/types'
 import type { SkillsClient } from '../features/skills/client'
 import { SkillEditor } from '../features/skills/SkillEditor'
+import type { ResumeClient } from '../features/resume/client'
+import type { ResumeResponse } from '../features/resume/types'
 import { ProfileScreen } from '../screens/ProfileScreen'
 import { SkillGapScreen } from '../screens/SkillGapScreen'
-import type { Skill } from '../types/api'
+import type { MeResponse, Skill } from '../types/api'
+import { PREVIEW_PROFILE } from './fakes'
 import type { PreviewScene } from './types'
 
 /*
@@ -216,6 +219,87 @@ function SkillEditorPreview() {
   )
 }
 
+
+/* ------------------------------------------------------------------ resume fakes */
+
+const RESUME_SUGGESTIONS: Skill[] = ['Data Visualization', 'Machine Learning', 'Power BI', 'Statistics', 'Tableau'].map(
+  name => DICTIONARY.find(skill => skill.name === name)!,
+)
+
+const PREVIEW_RESUME: ResumeResponse = {
+  resume_id: 'preview-resume',
+  user_id: PREVIEW_PROFILE.user_id,
+  file_name: 'wei-ling-tan-cv.pdf',
+  uploaded_at: '2026-10-24T10:15:00Z',
+  extracted_data: {
+    skills: ['Python', 'SQL', ...RESUME_SUGGESTIONS.map(skill => skill.name)],
+    education: [],
+    experience: [],
+    projects: [],
+  },
+  suggested_skills: RESUME_SUGGESTIONS,
+}
+
+function fakeResumeClient({
+  current = null,
+  upload = 'ok',
+}: {
+  current?: ResumeResponse | null
+  upload?: 'ok' | 'pending' | 'error'
+} = {}): ResumeClient {
+  return {
+    current: async () => structuredClone(current),
+    upload: async () => {
+      if (upload === 'pending') return new Promise<ResumeResponse>(() => {})
+      if (upload === 'error') {
+        throw { status: 422, code: 'validation_failed', message: 'That file could not be read. Try a different copy.' }
+      }
+      return structuredClone(PREVIEW_RESUME)
+    },
+  }
+}
+
+const previewLoad = async (): Promise<MeResponse> => ({
+  profile: PREVIEW_PROFILE,
+  onboarding_complete: true,
+  skills: MY_SKILLS,
+})
+
+/** Skills client whose `add` fails for the named skills, so one row shows "Not saved". */
+function skillsClientFailing(failing: string[] = []): SkillsClient {
+  return {
+    ...fakeSkillsClient,
+    add: async skillId => {
+      await new Promise(resolve => window.setTimeout(resolve, 40))
+      const name = DICTIONARY.find(skill => skill.skill_id === skillId)?.name ?? ''
+      if (failing.includes(name)) throw { status: 503, code: 'service_unavailable', message: 'busy' }
+    },
+  }
+}
+
+function profileScreen(resume: ResumeClient = fakeResumeClient(), skills: SkillsClient = fakeSkillsClient) {
+  return <InShell content={<ProfileScreen resumeClient={resume} skillsClient={skills} load={previewLoad} />} />
+}
+
+const chooseFile = (name: string) => () => {
+  const input = document.querySelector<HTMLInputElement>('input[type="file"]')
+  if (!input) return false
+  const transfer = new DataTransfer()
+  transfer.items.add(new File(['synthetic'], name, { type: 'application/pdf' }))
+  input.files = transfer.files
+  input.dispatchEvent(new Event('change', { bubbles: true }))
+  return true
+}
+
+const clickAddSelected = () => {
+  const button = Array.from(document.querySelectorAll<HTMLButtonElement>('.resume button')).find(item =>
+    item.textContent?.startsWith('Add selected'),
+  )
+  if (!button || button.disabled) return false
+  button.click()
+  return true
+}
+
 /* ------------------------------------------------------------------ scenes */
 
 export const b4Scenes: PreviewScene[] = [
@@ -324,11 +408,11 @@ export const b4Scenes: PreviewScene[] = [
   },
   {
     id: 'profile-default',
-    title: 'Profile, default (resume and skills not built yet)',
+    title: 'Profile, no resume yet',
     group: GROUP,
     path: routes.profile,
     reference: 'profile-default.png',
-    element: <InShell content={<ProfileScreen />} />,
+    element: profileScreen(),
   },
   {
     id: 'profile-name-edited',
@@ -337,7 +421,7 @@ export const b4Scenes: PreviewScene[] = [
     path: routes.profile,
     element: (
       <Steps steps={[typeInto('.profile__name-form input', 'Tan Wei Ling Wendy')]}>
-        <InShell content={<ProfileScreen />} />
+        {profileScreen()}
       </Steps>
     ),
   },
@@ -348,7 +432,7 @@ export const b4Scenes: PreviewScene[] = [
     path: routes.profile,
     element: (
       <Steps steps={[typeInto('.profile__name-form input', '')]}>
-        <InShell content={<ProfileScreen />} />
+        {profileScreen()}
       </Steps>
     ),
   },
@@ -366,13 +450,52 @@ export const b4Scenes: PreviewScene[] = [
       <Steps
         steps={[typeInto('.profile__name-form input', 'Tan Wei Ling Wendy'), clickSelector('.profile__name-form button[type="submit"]')]}
       >
-        <InShell content={<ProfileScreen />} />
+        {profileScreen()}
       </Steps>
     ),
   },
   {
+    id: 'profile-resume-uploading',
+    title: 'Profile, reading an uploaded resume',
+    group: GROUP,
+    path: routes.profile,
+    element: <Steps steps={[chooseFile('wei-ling-tan-cv.pdf')]}>{profileScreen(fakeResumeClient({ upload: 'pending' }))}</Steps>,
+  },
+  {
+    id: 'profile-resume-suggestions',
+    title: 'Profile, skills found in the resume (all ticked)',
+    group: GROUP,
+    path: routes.profile,
+    element: profileScreen(fakeResumeClient({ current: PREVIEW_RESUME })),
+  },
+  {
+    id: 'profile-resume-partial-failure',
+    title: 'Profile, one skill not saved (retry offered)',
+    group: GROUP,
+    path: routes.profile,
+    element: (
+      <Steps steps={[clickAddSelected]}>
+        {profileScreen(fakeResumeClient({ current: PREVIEW_RESUME }), skillsClientFailing(['Power BI']))}
+      </Steps>
+    ),
+  },
+  {
+    id: 'profile-resume-upload-error',
+    title: 'Profile, upload failed',
+    group: GROUP,
+    path: routes.profile,
+    element: <Steps steps={[chooseFile('wei-ling-tan-cv.pdf')]}>{profileScreen(fakeResumeClient({ upload: 'error' }))}</Steps>,
+  },
+  {
+    id: 'profile-resume-bad-file',
+    title: 'Profile, wrong file type chosen',
+    group: GROUP,
+    path: routes.profile,
+    element: <Steps steps={[chooseFile('notes.txt')]}>{profileScreen()}</Steps>,
+  },
+  {
     id: 'profile-skill-editor',
-    title: 'Skill editor (not yet mounted on Profile), searching "pow"',
+    title: 'Skill editor on its own, searching "pow"',
     group: GROUP,
     path: routes.profile,
     reference: 'profile-default.png',
