@@ -18,9 +18,19 @@ BENCH_OUT=/path/to/out.md bash backend/scripts/run_benchmark.sh
 The wrapper starts `postgres:16` and `mongo:7` on random `127.0.0.1` ports, creates the
 Supabase role/`auth.users` stand-ins, applies `docs/DB/001`, `002`, `003` and the Mongo
 collections script, seeds, benchmarks, writes the results file and removes both containers on
-exit (also on Ctrl-C or failure). It uses port 8231 for the throughput server and never reads
-any `.env` file. `seed_synthetic.py` and `benchmark.py` refuse any database URL whose host is
-not `127.0.0.1` or `localhost`.
+exit (also on Ctrl-C or failure). The throughput server listens on a free `127.0.0.1` port picked at run time (never 5173 or
+8000) and is identity-checked before any load is sent. No `.env` file is read.
+
+What the code guarantees about destinations: the scripts refuse to run (before any connection)
+unless the PostgreSQL URL's *effective* libpq parameters (via `psycopg2.extensions.parse_dsn`,
+so `?host=`, `?hostaddr=`, comma-separated multi-host lists and `service` files are caught) all
+name `127.0.0.1`/`localhost`, and the MongoDB URI is a single `127.0.0.1`/`localhost` node
+(no `mongodb+srv`, no seed lists; connections use `directConnection`). They also refuse to start
+if `PGHOST`, `PGHOSTADDR`, `PGSERVICE` or `PGSERVICEFILE` is set, and the wrapper unsets them.
+This is a guard against mistakes, not a sandbox: IPv6 (`::1`) is rejected as unsupported.
+Cleanup: the wrapper removes both containers by unique name on exit, Ctrl-C, SIGTERM or
+failure; a `kill -9` of the wrapper itself cannot be trapped, so check `docker ps -a` if you
+force-kill it.
 
 Files: `backend/scripts/seed_synthetic.py` (data), `backend/scripts/benchmark.py` (cases and
 report), `backend/scripts/bench_server.py` (local server for the throughput case),
@@ -30,7 +40,7 @@ report), `backend/scripts/bench_server.py` (local server for the throughput case
 
 Each row is 3 warm-up calls, then 30 timed calls; the table shows the median and p95 in ms.
 The code under test is the real backend code; only database objects (indexes) are toggled from
-the benchmark, and in case 5 the lock is swapped for a no-op in `bench_server.py` (no file under
+the benchmark (statistics are refreshed once before the toggling starts, not at each toggle), and in case 5 the lock is swapped for a no-op in `bench_server.py` (no file under
 `backend/app/` is changed).
 
 | Case | What is timed | Toggle |
@@ -50,9 +60,11 @@ user would feel.
 
 - Every table lists median and p95. Compare medians for the typical case and p95 for the
   worst-case-ish tail. With 30 samples, p95 is close to the 2nd-slowest run.
-- The "With vs without" table gives the median ratio. Treat differences under about 20% as
-  noise on a laptop: re-running the benchmark moves them. The EXPLAIN excerpts show what the
-  planner actually did, which is the more reliable evidence than the ratio.
+- Cases 1, 3 and 4 and the throughput case run in ABA order: with the object, without it, with
+  it again. The "With vs without" table shows all three medians. If the two "with" columns
+  differ from each other by as much as "without" differs from them, the effect is noise (a
+  laptop drifts by up to about 20% between phases). The EXPLAIN excerpts show what the planner
+  actually did, which is better evidence than any ratio.
 - Sizes: the primary run is 5,000 jobs (the PRD size); a 50,000-job run shows how the numbers
   scale. Row counts are in each section.
 - Seed distribution: 8 role categories (the rarest, "Quantum Computing", is about 1%); job
@@ -64,36 +76,44 @@ user would feel.
 
 These are readings of `results-2026-10-26.md`; re-run before quoting new numbers.
 
-- **Indexes help where the scan is the cost, and are not the whole story.** The Mongo
-  `role_category` index is the clearest win: a rare role is about 4x faster at 5,000 documents
-  and about 8x at 50,000 (the plan changes from COLLSCAN examining every document to an IXSCAN
-  examining only matches); a common role (about 30% of documents) gains little because most
-  documents match anyway. The Discover partial indexes turn the `jobs` Seq Scan into a Bitmap
-  Index Scan, but the 5,000-job gain is small (about 1.1-1.5x) because the cost of the Discover
-  statement is dominated by joining and ranking `job_skills` for every candidate job, which no
-  index on `jobs` can avoid. `jobs_active_posted_at_idx` is not used by Discover at all (its
-  ORDER BY starts with the computed coverage, not the posting date).
-- **The tracker `(user_id, status)` index shows no benefit at the specified scale.** Users have
-  at most 50 tracker rows, and the primary key `(user_id, job_id)` already finds a user's rows
-  directly; the status filter then discards a handful of rows. Even for the 2,000-row heavy
-  user at 5,000 jobs the planner's choice makes no measurable difference. Differences of about
-  10% either way at 5,000 jobs are noise. At 50,000 jobs the index measured about 1.6-1.9x
-  faster, but the same query is dominated by a Seq Scan on `jobs`, so read the planner output
-  before claiming a mechanism.
-- **SQL vs Mongo for skill gap.** At 5,000 jobs the two engines are within noise of each other
-  for the common role; Mongo's aggregation alone is fast, and the SQL path is cheaper once the
-  role's job ids are known. At 50,000 jobs SQL (`skill_gap_sql` with ids known) was about
-  1.9-2x faster than the Mongo aggregation for both roles, because it joins narrow indexed
-  rows instead of unwinding and regrouping documents. Choosing SQL for the counts needs the
-  role's job ids, which only Mongo stores, so the "end to end" row is the fair comparison for
-  the design as built: the engines are close there. The Mongo path also returns
-  `minimum_years`, which SQL cannot.
+- **The MongoDB `role_category` index is the clear win.** A rare role (about 1% of documents)
+  is about 3x faster at 5,000 documents (0.42 vs 1.22 ms) and about 10x at 50,000 (1.1 vs 10.7
+  ms); the plan changes from COLLSCAN (every document examined) to IXSCAN (only matches). A
+  common role (about 30% of documents) gains only 1.2-1.4x because most documents match anyway.
+- **The Discover partial indexes barely matter at these sizes.** They turn the `jobs` Seq Scan
+  into a Bitmap Index Scan (see the plan excerpt), but the statement's cost is dominated by
+  joining and ranking `job_skills` for every candidate job, which no index on `jobs` removes.
+  Medians are within about 10% for no filter and broad filters, and about 1.1-1.3x better for
+  the selective filter, both sizes, with the two "with" phases agreeing. `jobs_active_posted_at_idx`
+  is not used by Discover at all (its ORDER BY starts with the computed coverage).
+- **The tracker `(user_id, status)` index does nothing measurable here.** Users have at most 50
+  tracker rows (and the heavy user 2,000), and the primary key `(user_id, job_id)` already finds
+  a user's rows directly; the status filter then discards a handful. All variants are "about
+  the same" or within phase-to-phase noise, at both sizes. An earlier draft of this analysis
+  claimed a 1.6-1.9x gain at 50,000 jobs; that came from refreshing planner statistics at the
+  same moment the index was dropped, and disappeared once the methodology was fixed.
+- **SQL vs MongoDB for skill gap.** At 5,000 jobs the engines are close for the common role
+  (Mongo aggregation alone 15 ms, `skill_gap_sql` 18 ms, end to end both about 24-26 ms). At
+  50,000 jobs `skill_gap_sql` with the role's ids known is about 1.9x (SE role, 98 vs 184 ms)
+  to 1.8x (rare role, 14.7 vs 26.3 ms) faster than the Mongo aggregation, because it joins
+  narrow indexed rows instead of unwinding and regrouping documents. But SQL needs the role's
+  job ids, which only Mongo stores, so the fair end-to-end comparison for the design as built is
+  `skill_gap_mongo` 192 ms vs SQL end to end 138 ms for the common role, and 32 vs 35 ms for the
+  rare role (roughly equal). Mongo's path also returns `minimum_years`, which SQL cannot.
 - **The shared read lock costs throughput in this setup.** Without it the server sustained
-  about 170 requests/s vs about 100 requests/s with it (median latency about 55 ms vs 84 ms).
-  The lock is a second PostgreSQL connection per request (opened, locked, held for the request),
-  which doubles connection set-up; there is no connection pool. The benchmark has no concurrent
-  writer, so it measures the lock's overhead, not its benefit (blocking readers while an
-  admin refresh rewrites jobs). Say so in the report.
+  about 250 requests/s (median about 38 ms) against about 150 requests/s with it (median 53-60
+  ms). The lock is a second PostgreSQL connection per request, and the app has no connection
+  pool, so connection set-up doubles. There is no concurrent writer, so this measures the lock's
+  overhead, not its benefit (blocking readers while an admin refresh rewrites jobs); say so in
+  the report.
+- **Failed requests in the lock runs.** In the committed run the two "with lock" phases also
+  returned many HTTP 503 responses (see the table; only 200s count toward requests/s and
+  latency, so the with-lock throughput is if anything understated). They occur only in the
+  with-lock phases, which open twice the connections. The most likely cause is the benchmark
+  host's pool of ephemeral TCP ports (closed connections linger in TIME_WAIT for tens of seconds)
+  running out when every request opens fresh connections; this was inferred from timing and not
+  verified. An earlier identical run had no failures (131/184/154 requests/s for lock / no lock /
+  lock again). Either way the direction (the lock run is slower) is the same.
 
 ## Limitations
 
@@ -108,4 +128,6 @@ These are readings of `results-2026-10-26.md`; re-run before quoting new numbers
   few tens of percent between runs).
 - The throughput case uses unsigned development tokens (token verification is skipped) and no
   connection pool; production auth adds a little CPU per request.
-- No concurrent writers in the throughput case.
+- No concurrent writers in the throughput case, and no connection pool in the app, so the
+  throughput numbers are partly a measurement of connection set-up cost and of the host's TCP
+  port supply.

@@ -18,10 +18,11 @@ by the supplementary tracker-index variant.
 """
 
 import argparse
+import os
 import random
 import sys
 import uuid
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from urllib.parse import urlparse
@@ -59,25 +60,84 @@ class NotLocalError(RuntimeError):
     """A database URL points somewhere other than this machine."""
 
 
+ROUTING_ENV_VARS = ("PGHOST", "PGHOSTADDR", "PGSERVICE", "PGSERVICEFILE")
+
+
 def url_host(url: str) -> str:
-    """The host part of a postgresql:// or mongodb:// URL ('' when there is none)."""
+    """The host part of a URL ('' when there is none)."""
     return (urlparse(url).hostname or "").lower()
 
 
-def assert_local_urls(*urls: str) -> None:
-    """Raise unless every URL names 127.0.0.1 or localhost explicitly.
+def assert_no_routing_env(environ: Mapping[str, str] | None = None) -> None:
+    """Refuse to run while libpq routing defaults are set in the environment.
 
-    Anything else (a hostname, an Atlas SRV address, an unset/blank URL) is refused, so
-    the seed can never TRUNCATE a shared database by a pasted connection string.
+    PGHOSTADDR, PGSERVICE and PGSERVICEFILE can redirect a connection whose URL looks
+    local; PGHOST is refused too so no variable can quietly change the destination.
     """
-    for url in urls:
-        host = url_host(url)
-        if host not in LOCAL_HOSTS:
-            shown = host or "no host"
-            raise NotLocalError(
-                f"Refusing to run: database host is {shown!r}; only 127.0.0.1 or localhost "
-                "are allowed (disposable local databases only)."
-            )
+    environ = os.environ if environ is None else environ
+    present = [name for name in ROUTING_ENV_VARS if environ.get(name)]
+    if present:
+        raise NotLocalError(
+            f"Refusing to run: {', '.join(present)} set in the environment can redirect "
+            "PostgreSQL connections. Unset them (run_benchmark.sh does)."
+        )
+
+
+def assert_local_postgres_url(url: str) -> None:
+    """Validate the EFFECTIVE libpq parameters, not just the URL's authority part.
+
+    psycopg2.extensions.parse_dsn applies query overrides (``?host=``, ``?hostaddr=``)
+    exactly as libpq will. Every host, comma-separated multi-host lists included, must be
+    127.0.0.1 or localhost; a hostaddr must be 127.0.0.1; service files are refused.
+    """
+    from psycopg2.extensions import parse_dsn
+
+    try:
+        params = parse_dsn(url)
+    except Exception as exc:  # psycopg2.ProgrammingError for malformed input
+        raise NotLocalError(f"Refusing to run: unreadable PostgreSQL URL ({exc}).") from exc
+    if url_host(url) not in LOCAL_HOSTS:
+        raise NotLocalError(
+            f"Refusing to run: database host is {url_host(url) or 'missing'!r}; only 127.0.0.1 "
+            "or localhost are allowed (disposable local databases only)."
+        )
+    for key in ("service", "servicefile"):
+        if params.get(key):
+            raise NotLocalError(f"Refusing to run: the PostgreSQL URL sets {key!r}.")
+    hosts = [h.strip().lower() for h in params.get("host", "").split(",")]
+    if not params.get("host") or any(h not in LOCAL_HOSTS for h in hosts):
+        raise NotLocalError(
+            f"Refusing to run: effective PostgreSQL host(s) {params.get('host')!r}; only "
+            "127.0.0.1 or localhost are allowed."
+        )
+    if params.get("hostaddr") and any(
+        a.strip() != "127.0.0.1" for a in params["hostaddr"].split(",")
+    ):
+        raise NotLocalError("Refusing to run: hostaddr must be 127.0.0.1.")
+
+
+def assert_local_mongo_uri(uri: str) -> None:
+    """Exactly one node, on 127.0.0.1 or localhost; no SRV discovery, no seed lists."""
+    from pymongo.uri_parser import parse_uri
+
+    if uri.lower().startswith("mongodb+srv"):
+        raise NotLocalError("Refusing to run: mongodb+srv URIs discover remote nodes.")
+    try:
+        nodes = parse_uri(uri)["nodelist"]
+    except Exception as exc:
+        raise NotLocalError(f"Refusing to run: unreadable MongoDB URI ({exc}).") from exc
+    if len(nodes) != 1 or nodes[0][0].lower() not in LOCAL_HOSTS:
+        raise NotLocalError(
+            f"Refusing to run: MongoDB node(s) {nodes!r}; exactly one 127.0.0.1 or localhost "
+            "node is allowed."
+        )
+
+
+def assert_local_urls(database_url: str, mongodb_uri: str) -> None:
+    """Raise unless both destinations are this machine (and no libpq routing env is set)."""
+    assert_no_routing_env()
+    assert_local_postgres_url(database_url)
+    assert_local_mongo_uri(mongodb_uri)
 
 
 def weighted_choice(rng: random.Random, options: Sequence[tuple[str, int]]) -> str:
@@ -188,6 +248,22 @@ def build_dataset(
     }
 
 
+def connect_with_retry(database_url: str, attempts: int = 15, pause: float = 4.0):
+    """psycopg2.connect, retried: right after heavy connection churn Docker Desktop's port
+    proxy can briefly drop new connections to the container."""
+    import time
+
+    import psycopg2
+
+    for attempt in range(attempts):
+        try:
+            return psycopg2.connect(database_url)
+        except psycopg2.OperationalError:
+            if attempt == attempts - 1:
+                raise
+            time.sleep(pause)
+
+
 def seed(
     database_url: str,
     mongodb_uri: str,
@@ -199,11 +275,10 @@ def seed(
     """Replace the application data in the two disposable databases; returns row counts."""
     assert_local_urls(database_url, mongodb_uri)
 
-    import psycopg2
     from psycopg2.extras import execute_values
     from pymongo import MongoClient
 
-    conn = psycopg2.connect(database_url)
+    conn = connect_with_retry(database_url)
     try:
         with conn, conn.cursor() as cur:
             cur.execute("SELECT skill_id FROM public.skills ORDER BY skill_id")
@@ -257,7 +332,7 @@ def seed(
 
     # VACUUM sets the visibility map (index-only scans) and ANALYZE refreshes statistics,
     # so the first timed query does not race autovacuum. It cannot run in a transaction.
-    conn = psycopg2.connect(database_url)
+    conn = connect_with_retry(database_url)
     try:
         conn.autocommit = True
         with conn.cursor() as cur:
@@ -265,7 +340,7 @@ def seed(
     finally:
         conn.close()
 
-    client = MongoClient(mongodb_uri, serverSelectionTimeoutMS=10_000)
+    client = MongoClient(mongodb_uri, directConnection=True, serverSelectionTimeoutMS=10_000)
     try:
         collection = client[mongodb_database]["job_documents"]
         collection.delete_many({})

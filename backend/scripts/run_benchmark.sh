@@ -26,6 +26,9 @@ host_port=""
 mongo_host_port=""
 
 cleanup() {
+    # By unique name as well as by ID: an interrupt between `docker run` creating a
+    # container and the shell capturing its ID would otherwise leak it.
+    docker rm --force "$container_name" "$mongo_container_name" >/dev/null 2>&1 || true
     if [[ -n "$container_id" ]]; then
         docker rm --force "$container_id" >/dev/null 2>&1 || true
     fi
@@ -129,12 +132,13 @@ for migration in 001_initial_schema.sql 002_seed_skills.sql 003_views_triggers_i
 done
 
 database_url="postgresql://postgres:postgres@127.0.0.1:${host_port}/postgres"
-mongodb_uri="mongodb://127.0.0.1:${mongo_host_port}/"
+# directConnection: never discover other replica-set members.
+mongodb_uri="mongodb://127.0.0.1:${mongo_host_port}/?directConnection=true"
 mkdir -p "$(dirname -- "$out_file")"
 cd "$backend_dir"
 
 # uv must not read backend/.env, and nothing may leak in from the shell.
-env -u DATABASE_URL -u TEST_DATABASE_URL -u MONGODB_URI -u MONGODB_DATABASE -u TEST_MONGODB_URI \
+env -u PGHOST -u PGHOSTADDR -u PGSERVICE -u PGSERVICEFILE -u DATABASE_URL -u TEST_DATABASE_URL -u MONGODB_URI -u MONGODB_DATABASE -u TEST_MONGODB_URI \
     uv run --locked --no-env-file python scripts/benchmark.py \
         --database-url "$database_url" \
         --mongodb-uri "$mongodb_uri" \

@@ -133,3 +133,12 @@ task/PR, integration checks and next milestone notes here without duplicating ev
 - The README in `docs/perf/` explains how to run and read the tables and lists the limitations.
 - Unverified: numbers vary run to run on a laptop; the commentary in the README reflects the
   committed run only.
+
+### WP-10 review round 2 fixes (2026-10-26)
+
+- Guards now validate effective libpq parameters (`parse_dsn`: host, hostaddr, service) and
+  single-node MongoDB URIs (`parse_uri`, `directConnection`), and refuse inherited
+  `PGHOST`/`PGHOSTADDR`/`PGSERVICE`/`PGSERVICEFILE`; the throughput server uses a free port with
+  an identity check; the wrapper also removes containers by unique name; index cases run in ABA
+  order with one ANALYZE up front. Results regenerated; the earlier 50,000-job tracker-index gain
+  was an ANALYZE artefact and is retracted in `docs/perf/README.md`.

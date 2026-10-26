@@ -10,41 +10,81 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
 import benchmark  # noqa: E402
 import seed_synthetic  # noqa: E402
 
+GOOD_PG = "postgresql://postgres:pw@127.0.0.1:5432/postgres"
+GOOD_MONGO = "mongodb://127.0.0.1:27017/?directConnection=true"
+
+
+@pytest.fixture(autouse=True)
+def _clean_libpq_env(monkeypatch):
+    for name in seed_synthetic.ROUTING_ENV_VARS:
+        monkeypatch.delenv(name, raising=False)
+
 
 @pytest.mark.parametrize(
-    "url",
+    "pg",
     [
-        "postgresql://postgres:pw@127.0.0.1:5432/postgres",
+        GOOD_PG,
         "postgresql://postgres:pw@localhost:5432/postgres",
-        "mongodb://127.0.0.1:27017/",
-        "mongodb://LOCALHOST:27017/",
+        "postgresql://postgres:pw@127.0.0.1/postgres?hostaddr=127.0.0.1",
     ],
 )
-def test_local_urls_are_accepted(url):
-    seed_synthetic.assert_local_urls(url)
+def test_local_postgres_urls_are_accepted(pg):
+    seed_synthetic.assert_local_urls(pg, GOOD_MONGO)
 
 
 @pytest.mark.parametrize(
-    "url",
+    "pg",
     [
         "postgresql://postgres:pw@db.example.supabase.co:5432/postgres",
-        "mongodb+srv://user:pw@cluster0.example.mongodb.net/",
         "postgresql://postgres:pw@127.0.0.1.evil.example:5432/postgres",
         "postgresql://localhost@remote.example/postgres",
-        "postgresql:///postgres",  # unix socket / no host
+        "postgresql:///postgres",  # no host
+        "",
+        # bypasses of a naive authority-only check
+        "postgresql://u:p@127.0.0.1/db?host=remote.example",
+        "postgresql://u:p@127.0.0.1/db?hostaddr=203.0.113.1",
+        "postgresql://u:p@127.0.0.1/db?host=127.0.0.1,remote.example",
+        "postgresql://u:p@127.0.0.1/db?service=prod",
+        "postgresql://u:p@127.0.0.1/db?servicefile=/tmp/x",
+        "host=remote.example dbname=x",
+    ],
+)
+def test_non_local_postgres_urls_are_refused(pg):
+    with pytest.raises(seed_synthetic.NotLocalError):
+        seed_synthetic.assert_local_urls(pg, GOOD_MONGO)
+
+
+@pytest.mark.parametrize(
+    "mongo",
+    [
+        "mongodb+srv://user:pw@cluster0.example.mongodb.net/",
+        "mongodb+srv://127.0.0.1/",
+        "mongodb://127.0.0.1:27017,remote.example:27017/",
+        "mongodb://127.0.0.1:27017,127.0.0.1:27018/",
+        "mongodb://remote.example:27017/",
+        "mongodb://localhost.evil.example:27017/",
         "",
     ],
 )
-def test_non_local_urls_are_refused(url):
+def test_non_local_mongo_uris_are_refused(mongo):
     with pytest.raises(seed_synthetic.NotLocalError):
-        seed_synthetic.assert_local_urls("postgresql://u:p@127.0.0.1:5432/postgres", url)
+        seed_synthetic.assert_local_urls(GOOD_PG, mongo)
+
+
+@pytest.mark.parametrize("name", seed_synthetic.ROUTING_ENV_VARS)
+def test_inherited_libpq_routing_env_is_refused(monkeypatch, name):
+    monkeypatch.setenv(name, "anything")
+    with pytest.raises(seed_synthetic.NotLocalError):
+        seed_synthetic.assert_local_urls(GOOD_PG, GOOD_MONGO)
+    with pytest.raises(seed_synthetic.NotLocalError):
+        seed_synthetic.seed(GOOD_PG, GOOD_MONGO, "x", n_jobs=10)
 
 
 def test_seed_refuses_before_touching_any_database():
     with pytest.raises(seed_synthetic.NotLocalError):
         seed_synthetic.seed(
             "postgresql://postgres:pw@db.example.supabase.co:5432/postgres",
-            "mongodb://127.0.0.1:27017/",
+            GOOD_MONGO,
             "x",
             n_jobs=10,
         )
@@ -56,7 +96,7 @@ def test_seed_cli_exits_2_for_a_remote_url(capsys):
             "--database-url",
             "postgresql://postgres:pw@db.example.supabase.co:5432/postgres",
             "--mongodb-uri",
-            "mongodb://127.0.0.1:27017/",
+            GOOD_MONGO,
         ]
     )
     assert code == 2

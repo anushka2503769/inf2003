@@ -22,6 +22,8 @@ import math
 import os
 import platform
 import re
+import secrets
+import socket
 import statistics
 import subprocess
 import sys
@@ -48,11 +50,13 @@ from seed_synthetic import (  # noqa: E402
 
 WARMUPS = 3
 RUNS = 30
-SERVER_PORT = 8231
 TIME_WAIT_PAUSE_SECONDS = 45
 THROUGHPUT_SECONDS = 30
 THROUGHPUT_WORKERS = 10
 HEAVY_TRACKER_ROWS = 2_000
+# ABA order so a trend over time (cache, thermal, background work) is not confounded with
+# the toggle: the first and last phases have the object, the middle one does not.
+PHASES = (("with", True), ("without", False), ("with (repeat)", True))
 MONGO_INDEX = "job_role_category"
 SQL_INDEXES = (
     "jobs_active_type_arrangement_idx",
@@ -256,7 +260,6 @@ def execute_ddl(database_url: str, statements: Sequence[str]) -> None:
         with conn.cursor() as cur:
             for statement in statements:
                 cur.execute(statement)
-            cur.execute("ANALYZE")
     finally:
         conn.close()
 
@@ -337,7 +340,7 @@ def run_discover(database_url: str, ddl: dict[str, str], user_id: str) -> tuple[
         return lambda: store.feed(uid, flt, 20, 0)
 
     selective = DISCOVER_FILTERS["selective (INTERNSHIP, REMOTE, ~4% of jobs)"]
-    for label, enabled in (("with", True), ("without", False)):
+    for label, enabled in PHASES:
         ctx = sql_indexes_dropped(database_url, names, ddl) if not enabled else nullcontext_()
         with ctx:
             for variant, (job_type, arrangement) in DISCOVER_FILTERS.items():
@@ -360,9 +363,10 @@ def run_discover(database_url: str, ddl: dict[str, str], user_id: str) -> tuple[
                         )
                     )
             flt = DiscoverFilters(job_type=selective[0], work_arrangement=selective[1])
-            plans[label] = plan_excerpt(
-                explain_sql(database_url, DISCOVER_SQL, query_parameters(uid, flt, 21, 0))
-            )
+            if label in ("with", "without"):
+                plans[label] = plan_excerpt(
+                    explain_sql(database_url, DISCOVER_SQL, query_parameters(uid, flt, 21, 0))
+                )
     return rows, plans
 
 
@@ -447,8 +451,8 @@ def run_mongo_role_filter(mongo_db) -> tuple[list, dict]:
     collection = mongo_db["job_documents"]
     field = "extracted_data.role_category"
     rows, plans = [], {}
-    for label in ("with", "without"):
-        if label == "without":
+    for label, enabled in PHASES:
+        if not enabled:
             collection.drop_index(MONGO_INDEX)
         try:
             for role in (COMMON_ROLE, RARE_ROLE):
@@ -465,9 +469,10 @@ def run_mongo_role_filter(mongo_db) -> tuple[list, dict]:
                         ),
                     )
                 )
-            plans[label] = explain_mongo(collection, {field: RARE_ROLE})
+            if label in ("with", "without"):
+                plans[label] = explain_mongo(collection, {field: RARE_ROLE})
         finally:
-            if label == "without":
+            if not enabled:
                 collection.create_index([(field, 1)], name=MONGO_INDEX)
     return rows, plans
 
@@ -485,8 +490,8 @@ def run_tracker(database_url: str, ddl: dict[str, str], busy_user: str, heavy_us
             (f"supplementary heavy user ({HEAVY_TRACKER_ROWS:,} tracker rows)", heavy_user)
         )
     rows, plans = [], {}
-    for label in ("with", "without"):
-        ctx = nullcontext_() if label == "with" else sql_indexes_dropped(database_url, [name], ddl)
+    for label, enabled in PHASES:
+        ctx = nullcontext_() if enabled else sql_indexes_dropped(database_url, [name], ddl)
         with ctx:
             for who, user_id in users:
                 uid = UUID(user_id)
@@ -518,9 +523,10 @@ def run_tracker(database_url: str, ddl: dict[str, str], busy_user: str, heavy_us
                    AND (%s::text[] IS NULL OR t.status = ANY(%s::text[]))
                  ORDER BY t.updated_at DESC, t.job_id
                  LIMIT %s OFFSET %s"""
-            plans[label] = plan_excerpt(
-                explain_sql(database_url, sql, (target, ["SAVED"], ["SAVED"], 20, 0))
-            )
+            if label in ("with", "without"):
+                plans[label] = plan_excerpt(
+                    explain_sql(database_url, sql, (target, ["SAVED"], ["SAVED"], 20, 0))
+                )
     return rows, plans
 
 
@@ -558,6 +564,13 @@ def unsigned_token(user_id: str) -> str:
     return jwt.encode({"sub": user_id}, None, algorithm="none")
 
 
+def free_local_port() -> int:
+    """A currently free port on 127.0.0.1 (the identity check guards the small race)."""
+    with socket.socket() as sock:
+        sock.bind(("127.0.0.1", 0))
+        return sock.getsockname()[1]
+
+
 def run_throughput(
     database_url: str, mongodb_uri: str, mongodb_database: str, user_ids: Sequence[str]
 ) -> list[dict[str, Any]]:
@@ -565,13 +578,19 @@ def run_throughput(
 
     results = []
     for position, (label, no_lock) in enumerate(
-        (("with shared read lock", "0"), ("without shared read lock", "1"))
+        (
+            ("with shared read lock", "0"),
+            ("without shared read lock", "1"),
+            ("with shared read lock (repeat)", "0"),
+        )
     ):
         if position:
             # Every request opens fresh TCP connections to PostgreSQL (there is no pool).
             # Let the first run's TIME_WAIT sockets drain so the second run does not
             # start close to local ephemeral-port exhaustion.
             time.sleep(TIME_WAIT_PAUSE_SECONDS)
+        token = secrets.token_hex(16)
+        port = free_local_port()
         env = {
             "PATH": os.environ.get("PATH", ""),
             "HOME": os.environ.get("HOME", ""),
@@ -581,13 +600,14 @@ def run_throughput(
             "APP_ENV": "development",
             "AUTH_ALLOW_UNVERIFIED_TOKENS": "true",
             "BENCH_NO_READ_LOCK": no_lock,
+            "BENCH_TOKEN": token,
         }
         server = subprocess.Popen(
             [
                 sys.executable,
                 str(Path(__file__).with_name("bench_server.py")),
                 "--port",
-                str(SERVER_PORT),
+                str(port),
             ],
             env=env,
             cwd=BACKEND_DIR,
@@ -595,10 +615,16 @@ def run_throughput(
             stderr=subprocess.DEVNULL,
         )
         try:
-            base = f"http://127.0.0.1:{SERVER_PORT}"
+            base = f"http://127.0.0.1:{port}"
+            expected = {"token": token, "no_read_lock": no_lock == "1"}
             for _ in range(60):
+                if server.poll() is not None:
+                    raise RuntimeError(f"The benchmark server exited with status {server.poll()}.")
                 try:
-                    if httpx.get(f"{base}/api/health", timeout=2).status_code == 200:
+                    reply = httpx.get(f"{base}/__bench/identity", timeout=2)
+                    if reply.status_code == 200:
+                        if reply.json() != expected:
+                            raise RuntimeError("Another server answered; refusing to measure it.")
                         break
                 except httpx.HTTPError:
                     time.sleep(0.5)
@@ -679,26 +705,36 @@ def _drive(base: str, label: str, user_ids: Sequence[str]) -> dict[str, Any]:
 
 
 def pair_table(rows: Sequence[dict[str, Any]]) -> str:
-    """With-vs-without pairs (cases 1, 3, 4): medians side by side and the ratio."""
+    """With/without/with-again triples (cases 1, 3, 4): medians and the ratio."""
     grouped: dict[tuple[str, str], list[dict[str, Any]]] = {}
     for r in rows:
         grouped.setdefault((r["case"], r["variant"]), []).append(r)
     body = []
     for (case, variant), group in grouped.items():
-        if len(group) != 2:
+        if len(group) != 3:
             continue
-        with_, without = group
+        first, without, again = group
+        with_mean = (first["median"] + again["median"]) / 2
         body.append(
             (
                 case,
                 variant,
-                fmt(with_["median"]),
+                fmt(first["median"]),
                 fmt(without["median"]),
-                f"{speedup(without['median'], with_['median'])} with the index",
+                fmt(again["median"]),
+                f"{speedup(without['median'], with_mean)} with the index",
             )
         )
     return md_table(
-        ["Case", "Variant", "With index: median (ms)", "Without: median (ms)", "Effect"], body
+        [
+            "Case",
+            "Variant",
+            "With: median (ms)",
+            "Without: median (ms)",
+            "With, repeated: median (ms)",
+            "Effect (without vs mean of the two with)",
+        ],
+        body,
     )
 
 
@@ -729,8 +765,9 @@ def run_size(args, n_jobs: int, ddl: dict[str, str], with_throughput: bool) -> d
         HEAVY_TRACKER_ROWS,
     )
     configure_environment(args.database_url, args.mongodb_uri, args.mongodb_database)
+    execute_ddl(args.database_url, ["ANALYZE"])  # once; index toggles must not re-analyze
     time.sleep(5)  # let background work from the bulk load (checkpoints, Mongo journal) settle
-    client = MongoClient(args.mongodb_uri)
+    client = MongoClient(args.mongodb_uri, directConnection=True)
     mongo_db = client[args.mongodb_database]
     pg = psycopg2.connect(args.database_url)
     pg.autocommit = True
@@ -795,7 +832,8 @@ def render(args, sections: list[dict[str, Any]]) -> str:
             "",
             long_table(section["rows"]),
             "",
-            "With vs without, medians only (cases 1, 3 and 4):",
+            "With / without / with again (ABA order), medians only (cases 1, 3, 4). "
+            'If the two "with" columns disagree by more than the effect, it is noise:',
             "",
             pair_table(section["rows"]),
             "",
@@ -829,7 +867,8 @@ def render(args, sections: list[dict[str, Any]]) -> str:
                 "",
                 "Each worker is a keep-alive `httpx` client for one seeded user and picks one of "
                 "three Discover queries (no filter, broad filter, selective filter) at random. "
-                "The server is the real FastAPI app on `127.0.0.1:8231` with unsigned "
+                "The server is the real FastAPI app on a free `127.0.0.1` port, "
+                "identity-checked before load starts, with unsigned "
                 'development tokens; the "without" run replaces the route\'s lock with a no-op.',
                 "",
             ]
