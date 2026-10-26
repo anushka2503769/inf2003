@@ -31,6 +31,11 @@ logger = logging.getLogger(__name__)
 # Supabase issues access tokens with this audience for signed-in end users.
 _AUDIENCE = "authenticated"
 
+# Seconds of clock difference tolerated between Supabase and this machine. Without
+# it, a laptop clock slightly behind Supabase rejects a token issued a moment ago
+# as "not yet valid (iat)", and the browser is signed straight back out.
+_CLOCK_LEEWAY_SECONDS = 30
+
 _jwk_client: PyJWKClient | None = None
 
 
@@ -73,6 +78,7 @@ def _decode(token: str, settings: Settings) -> dict[str, Any]:
             signing_key.key,
             algorithms=["ES256", "RS256"],
             audience=_AUDIENCE,
+            leeway=_CLOCK_LEEWAY_SECONDS,
         )
 
     if settings.supabase_jwt_secret:
@@ -81,6 +87,7 @@ def _decode(token: str, settings: Settings) -> dict[str, Any]:
             settings.supabase_jwt_secret,
             algorithms=["HS256"],
             audience=_AUDIENCE,
+            leeway=_CLOCK_LEEWAY_SECONDS,
         )
 
     # Misconfiguration, not a client mistake: say so instead of blaming the token.

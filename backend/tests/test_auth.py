@@ -93,6 +93,22 @@ def test_expired_token_is_rejected() -> None:
     assert caught.value.status_code == 401
 
 
+def test_token_issued_seconds_ahead_of_our_clock_is_accepted() -> None:
+    # Supabase's clock can run slightly ahead of a laptop's; a fresh token must
+    # not bounce the student back to sign-in.
+    ahead = dt.datetime.now(dt.UTC) + dt.timedelta(seconds=5)
+    subject = str(uuid4())
+    user = current_user(make_request(make_token(sub=subject, iat=ahead)), hs256_settings())
+    assert str(user.user_id) == subject
+
+
+def test_token_issued_far_in_the_future_is_rejected() -> None:
+    future = dt.datetime.now(dt.UTC) + dt.timedelta(minutes=10)
+    with pytest.raises(ApiError) as caught:
+        current_user(make_request(make_token(iat=future)), hs256_settings())
+    assert caught.value.status_code == 401
+
+
 def test_wrong_audience_is_rejected() -> None:
     with pytest.raises(ApiError) as caught:
         current_user(make_request(make_token(aud="anon")), hs256_settings())
