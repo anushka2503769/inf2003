@@ -60,7 +60,7 @@ describe('DiscoverFeed', () => {
     expect(await screen.findByRole('heading', { name: 'Junior Developer' })).toBeInTheDocument()
     expect(screen.getByText('You have 1 of 2 required skills')).toBeInTheDocument()
     const missing = screen.getByLabelText('Missing skills')
-    expect(within(missing).getAllByRole('listitem').map(item => item.textContent?.split(' ·')[0])).toEqual(['SQL', 'Docker'])
+    expect(within(missing).getAllByRole('listitem').map(item => item.querySelector('.dskills__name')?.textContent)).toEqual(['SQL', 'Docker'])
     expect(screen.getByRole('link', { name: 'Open posting' })).toHaveAttribute('target', '_blank')
     expect(screen.getByRole('link', { name: 'Open posting' })).toHaveAttribute('rel', 'noopener noreferrer')
   })
@@ -123,9 +123,9 @@ describe('DiscoverFeed', () => {
     renderFeed(client)
     await user.click(await screen.findByRole('button', { name: /^Save / }))
 
-    expect(await screen.findByText('Not saved — retry')).toBeInTheDocument()
+    expect(await screen.findByText('Couldn’t save “Junior Developer”.')).toBeInTheDocument()
     expect(screen.getByRole('heading', { name: 'Junior Developer' })).toBeInTheDocument()
-    await user.click(screen.getByRole('button', { name: 'Not saved — retry' }))
+    await user.click(screen.getByRole('button', { name: 'Retry' }))
     await waitFor(() => expect(decide).toHaveBeenCalledTimes(2))
     await waitFor(() => expect(screen.queryByRole('heading', { name: 'Junior Developer' })).not.toBeInTheDocument())
   })
@@ -136,7 +136,7 @@ describe('DiscoverFeed', () => {
     renderFeed(client)
     expect(await screen.findByText('No skill requirements were extracted for this job.')).toBeInTheDocument()
     await userEvent.click(screen.getByRole('button', { name: /^Save / }))
-    expect(await screen.findByText('No more jobs for these filters')).toBeInTheDocument()
+    expect(await screen.findByText('You’ve seen everything that matches.')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Change filters' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Check again' })).toBeInTheDocument()
   })
@@ -164,6 +164,11 @@ describe('DiscoverFeed', () => {
     await act(async () => resolveDecision())
     await waitFor(() => expect(list).toHaveBeenCalledTimes(2))
     expect(list).toHaveBeenLastCalledWith({}, 3, 20)
+    // One card at a time: decide roles 2-4, then the prefetched role 5 is next.
+    for (const title of ['Test role 2', 'Test role 3', 'Test role 4']) {
+      await userEvent.click(await screen.findByRole('button', { name: `Save ${title}` }))
+      await act(async () => resolveDecision())
+    }
     expect(await screen.findByRole('heading', { name: 'Test role 5' })).toBeInTheDocument()
   })
 
@@ -192,6 +197,9 @@ describe('DiscoverFeed', () => {
     expect(list).toHaveBeenLastCalledWith({}, 0, 20)
     await act(async () => resolveOldPage({ items: [next], has_more: false }))
     expect(screen.getAllByRole('heading', { name: 'Next job' })).toHaveLength(1)
+    // Only one card renders, so also prove no duplicate is queued behind it.
+    await userEvent.click(screen.getByRole('button', { name: 'Save Next job' }))
+    expect(await screen.findByText('You’ve seen everything that matches.')).toBeInTheDocument()
   })
 
   it('preserves loaded cards when prefetch fails and offers a manual retry', async () => {
@@ -238,13 +246,13 @@ describe('DiscoverFeed', () => {
 
     await user.click(await screen.findByRole('button', { name: /^Save / }))
     expect(screen.getByRole('button', { name: 'Apply filters' })).toBeDisabled()
-    expect(screen.queryByText('No more jobs for these filters')).not.toBeInTheDocument()
+    expect(screen.queryByText('You’ve seen everything that matches.')).not.toBeInTheDocument()
     await user.type(screen.getByLabelText('Location'), 'Remote{Enter}')
     expect(list).toHaveBeenCalledTimes(1)
     expect(screen.getByLabelText('Current URL')).toHaveTextContent('')
 
     await act(async () => rejectDecision(new Error('offline')))
-    expect(await screen.findByText('Not saved — retry')).toBeInTheDocument()
+    expect(await screen.findByText('Couldn’t save “Junior Developer”.')).toBeInTheDocument()
     expect(screen.getByRole('heading', { name: 'Junior Developer' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Apply filters' })).toBeEnabled()
   })
@@ -253,8 +261,9 @@ describe('DiscoverFeed', () => {
     const reload = vi.fn(async () => { throw new Error('reload failed') })
     const client = makeClient({ list: vi.fn(async () => { throw { code: 'not_found', details: { resource: 'profile' } } }) })
     render(<MemoryRouter><DiscoverFeed client={client} onProfileMissing={reload} /></MemoryRouter>)
-    expect(await screen.findByText('Could not load jobs. Try again.')).toBeInTheDocument()
-    expect(screen.queryByText('No more jobs for these filters')).not.toBeInTheDocument()
+    expect(await screen.findByRole('heading', { name: 'Let’s set up your profile first.' })).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'Go now' })).toHaveAttribute('href', '/welcome')
+    expect(screen.queryByText('You’ve seen everything that matches.')).not.toBeInTheDocument()
   })
 
   it('rolls the card back when a decision fails even if the profile reload rejects', async () => {
@@ -262,7 +271,7 @@ describe('DiscoverFeed', () => {
     const decide = vi.fn(async () => { throw { status: 404, code: 'not_found', message: 'x', details: { resource: 'profile' } } })
     render(<MemoryRouter><DiscoverFeed client={makeClient({ decide })} onProfileMissing={reload} /></MemoryRouter>)
     await userEvent.click(await screen.findByRole('button', { name: /^Save / }))
-    expect(await screen.findByText('Not saved — retry')).toBeInTheDocument()
+    expect(await screen.findByText('Couldn’t save “Junior Developer”.')).toBeInTheDocument()
     expect(reload).toHaveBeenCalledTimes(1)
   })
 
@@ -295,7 +304,7 @@ describe('DiscoverFeed', () => {
     renderFeed(makeClient({ decide }))
     await userEvent.click(await screen.findByRole('button', { name: /^Save / }))
     expect(await screen.findByText('This job is no longer available.')).toBeInTheDocument()
-    expect(screen.queryByText('Not saved — retry')).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Retry' })).not.toBeInTheDocument()
     expect(screen.queryByRole('heading', { name: 'Junior Developer' })).not.toBeInTheDocument()
   })
 
@@ -306,9 +315,10 @@ describe('DiscoverFeed', () => {
     const save = await screen.findByRole('button', { name: 'Save Junior Developer' })
     expect(save).toHaveAttribute('aria-keyshortcuts', 'ArrowRight')
     expect(screen.getByRole('button', { name: 'Not interested in Junior Developer' })).toHaveAttribute('aria-keyshortcuts', 'ArrowLeft')
-    expect(screen.getByRole('button', { name: 'Save Second role' })).not.toHaveAttribute('aria-keyshortcuts')
+    expect(screen.queryByRole('button', { name: 'Save Second role' })).not.toBeInTheDocument()
     await userEvent.click(save)
     await waitFor(() => expect(screen.getByRole('button', { name: 'Save Second role' })).toHaveFocus())
+    expect(screen.getByRole('button', { name: 'Save Second role' })).toHaveAttribute('aria-keyshortcuts', 'ArrowRight')
   })
 
   it('renders Open posting only for http(s) application URLs', async () => {
@@ -334,5 +344,24 @@ describe('DiscoverFeed', () => {
     const reload = vi.fn()
     render(<MemoryRouter><DiscoverFeed client={client} onProfileMissing={reload} /></MemoryRouter>)
     await waitFor(() => expect(reload).toHaveBeenCalledTimes(1))
+  })
+
+  it('opens the mobile filter sheet as a modal dialog, locks page scroll, and Escape closes it back to Filters', async () => {
+    const user = userEvent.setup()
+    renderFeed(makeClient())
+    const filters = await screen.findByRole('button', { name: 'Filters' })
+    expect(filters).toHaveAttribute('aria-expanded', 'false')
+
+    await user.click(filters)
+    const sheet = screen.getByRole('dialog', { name: 'Filters' })
+    expect(sheet).toHaveAttribute('aria-modal', 'true')
+    expect(filters).toHaveAttribute('aria-expanded', 'true')
+    expect(document.body.style.overflow).toBe('hidden')
+    expect(sheet).toContainElement(document.activeElement as HTMLElement)
+
+    await user.keyboard('{Escape}')
+    expect(screen.queryByRole('dialog', { name: 'Filters' })).not.toBeInTheDocument()
+    expect(document.body.style.overflow).toBe('')
+    expect(filters).toHaveFocus()
   })
 })
