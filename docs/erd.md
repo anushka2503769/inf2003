@@ -1,9 +1,9 @@
 # MVP data model
 
-Baseline approved 9 September 2026; updated 25 October 2026. `001` and the `002` skill
-seed (139 skills) are applied to the development Supabase project. Migration `003`
-(views, triggers, indexes) is planned under WP-1 in [PRD.md](PRD.md) — see the end of
-this file. Tables and columns below are unchanged by 003.
+Baseline approved 9 September 2026; updated 26 October 2026. `001`, the `002` skill
+seed (139 skills) and migration `003` (views, triggers, indexes; applied 26 October 2026,
+see [DB/README.md](DB/README.md)) are on the development Supabase project — see the end of
+this file for 003. Tables and columns below are unchanged by 003.
 
 The runnable Supabase bootstrap is [DB/001_initial_schema.sql](DB/001_initial_schema.sql).
 See [DB/README.md](DB/README.md) for application instructions and verification limits.

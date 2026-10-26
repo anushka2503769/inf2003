@@ -108,3 +108,17 @@ task/PR, integration checks and next milestone notes here without duplicating ev
 - Checks: vitest `11 files / 112 tests passed`; `npm run build` passes.
 - Follow-ups outside B1's file list: `app/guards.tsx` (Sign out on "profile did not load"),
   `app/routes.ts` ("Skill Gap" capitalisation), `index.html` (drop the old Google Fonts link).
+
+### WP-11 progress note (2026-10-26)
+
+- Branch: `docs/wp11-user-manual`. commit: (filled in by orchestrator)
+- Added `docs/USER_MANUAL.md` (setup from a fresh laptop: Supabase 001-003, Google provider,
+  Atlas, env files, run, ingestion CLI, walkthrough, tests, troubleshooting). Linked from
+  `docs/README.md`; there is no top-level `README.md`. Fixed `docs/README.md` (Python is 3.12
+  per `backend/.python-version`; removed the stale "vite.config.ts is missing" note).
+- `docs/API.md`: status header and §6-§8 headings now say implemented; paths and methods match
+  the OpenAPI output. `GET /api/me/resume` and `suggested_skills` remain planned (WP-6).
+- Not done: ER diagram unchanged; `docs/erd.md` still calls migration 003 "planned" (it is applied).
+  The manual's Google/Atlas/Supabase dashboard steps were written from the repo and are not
+  verified against the live dashboards.
+- Sections to add when they land: resume upload and suggested skills (WP-6), benchmarks (WP-10).
