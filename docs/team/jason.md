@@ -168,7 +168,7 @@ sign-in configured first.
 
 ### WP-1 progress note (overnight 2026-10-26)
 
-- Branch: `feat/wp1-sql-003`; commit: (filled in by orchestrator).
+- Branch: `feat/wp1-sql-003`; commit: `7fa1ef6` (build) + `17939f8` (review fix round); orchestrator re-ran checks on `17939f8`: ruff clean, pytest 51 passed / 51 skipped, disposable DB 102 passed.
 - Delivered `docs/DB/003_views_triggers_indexes.sql`, `backend/tests/test_sql_003.py`, the
   disposable script now applies 001 then 003 (not 002), and the erd.md "Migration 003" section.
 - Checks: `bash backend/scripts/run_disposable_db_tests.sh` -> 98 passed; ruff check, ruff
@@ -214,3 +214,4 @@ sign-in configured first.
 - Once WP-1's trigger fix (row-exists pass-through) merges, `PUT` could be simplified to the
   bare `INSERT ... ON CONFLICT DO UPDATE`; the CTE is correct under both trigger versions.
 - Checks: ruff check, ruff format --check pass; pytest 77 passed, 61 skipped; disposable DB 138 passed.
+- Regression tests added for the exact upsert statement; commit: `7fa1ef6` (build) + `17939f8` (review fix round); orchestrator re-ran checks on `17939f8`: ruff clean, pytest 51 passed / 51 skipped, disposable DB 102 passed.
