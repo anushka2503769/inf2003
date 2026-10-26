@@ -181,6 +181,19 @@ assumed from memory of an earlier session):
   (fails with the old auto-select). Existing tests now pick their role explicitly.
 - Checks: `npm test` 5 files / 60 tests passed; `npm run build` ✓; `git diff --check` clean.
 
+### Redesign B4: Skill Gap + Profile restyle (2026-10-26, uncommitted, orchestrator commits)
+
+- Skill Gap now uses "The Notebook" look: serif page head, labelled role select, summary card with a
+  segmented meter, ranked rows (frequency bar, REQUIRED/PREFERRED counts, Gap / You have this badge),
+  drawn tick-box over a real checkbox gating "Add to my skills", skeleton loading, inline errors,
+  empty states for pick-a-role / no roles ("Check again" re-runs the roles load) / zero requirements.
+  All data flow unchanged (no role pre-selected, late-response guard, top_n summary, add retry).
+- Profile restyled with what exists (name editor, resume-and-skills placeholder, account/sign-out).
+  SkillEditor restyled (chips + search panel) but is still not mounted on Profile; resume upload and
+  review do not exist yet.
+- Tests: two assertions in SkillGapScreen.test.tsx changed text only ("You have this" badge without
+  the ✓ glyph; Required/Preferred counts checked as one facts line). `npm test` 11 files / 112 passed.
+- Preview scenes: `frontend/src/preview/scenes-b4.tsx` (16 scenes under "B4 Skill Gap + Profile").
 ### Redesign B3 Vault progress note (2026-10-26)
 
 - Branch: `feat/redesign-b3-vault` (worktree build, not committed by the builder).

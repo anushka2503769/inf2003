@@ -1,6 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
-import { InlineError } from '../../components/Feedback'
+import { Badge } from '../../components/Badge'
+import { Button } from '../../components/Button'
+import { InlineError, Spinner } from '../../components/Feedback'
+import { Icon } from '../../components/Icon'
 import { TextField } from '../../components/TextField'
 import type { Skill } from '../../types/api'
 import { isSkillsClientError, mockSkillsClient, type SkillsClient } from './client'
@@ -146,51 +149,59 @@ export function SkillEditor({
 
   return (
     <section className={className ? `skill-editor ${className}` : 'skill-editor'}>
-      <div className="stack">
-        <h2 className="heading-2">Confirmed skills</h2>
-        <hr className="rule" />
-        {confirmedSkills.length === 0 ? (
-          <p className="note">You haven't confirmed any skills yet. Search below to add some.</p>
-        ) : (
-          <ul className="skill-editor__list" aria-label="Your confirmed skills">
-            {confirmedSkills.map(skill => {
-              const state = rowState[skill.skill_id]
-              return (
-                <li key={skill.skill_id} className="skill-editor__row">
-                  <span className="skill-editor__name">{skill.name}</span>
-                  <button
-                    type="button"
-                    className="button button--quiet"
-                    disabled={state?.status === 'pending'}
-                    onClick={() => void runOperation(skill.skill_id, 'remove')}
-                  >
-                    {state?.status === 'pending' ? 'Removing…' : 'Remove'}
-                  </button>
-                  {state?.status === 'error' ? (
-                    <span className="skill-editor__row-error">
-                      <InlineError>{state.errorMessage}</InlineError>
-                    </span>
-                  ) : null}
-                </li>
-              )
-            })}
-          </ul>
-        )}
+      <div className="skill-editor__head">
+        <h2 className="skill-editor__title">
+          Skills <span className="skill-editor__count">{confirmedSkills.length}</span>
+        </h2>
+        <p className="skill-editor__lede">Add what you can genuinely talk about in an interview.</p>
       </div>
 
-      <div className="stack">
-        <h2 className="heading-2">Add a skill</h2>
-        <hr className="rule" />
+      {confirmedSkills.length === 0 ? (
+        <p className="note">You haven't confirmed any skills yet. Search below to add some.</p>
+      ) : (
+        <ul className="skill-editor__chips" aria-label="Your confirmed skills">
+          {confirmedSkills.map(skill => {
+            const state = rowState[skill.skill_id]
+            const nameId = `skill-editor-confirmed-${skill.skill_id}`
+            const pending = state?.status === 'pending'
+            return (
+              <li key={skill.skill_id} className="skill-editor__chip-item">
+                <span className="chip">
+                  <span id={nameId}>{skill.name}</span>
+                  <button
+                    type="button"
+                    className="chip__x"
+                    aria-label={pending ? 'Removing…' : 'Remove'}
+                    aria-describedby={nameId}
+                    disabled={pending}
+                    onClick={() => void runOperation(skill.skill_id, 'remove')}
+                  >
+                    {pending ? <Spinner size="sm" /> : <Icon name="x" />}
+                  </button>
+                </span>
+                {state?.status === 'error' ? (
+                  <span className="skill-editor__row-error">
+                    <InlineError>{state.errorMessage}</InlineError>
+                  </span>
+                ) : null}
+              </li>
+            )
+          })}
+        </ul>
+      )}
+
+      <div className="skill-editor__search">
         <TextField
           label="Search the skill dictionary"
           value={query}
           onChange={setQuery}
-          placeholder="e.g. Python"
-          hint="Selecting an existing entry is the only way to add a skill in this milestone."
+          placeholder="Search skills to add, e.g. Tableau"
+          icon="magnifying-glass"
         />
 
         {searchStatus === 'loading' ? (
-          <p className="note" role="status">
+          <p className="toast-line t-meta" role="status">
+            <Spinner size="sm" />
             Searching…
           </p>
         ) : null}
@@ -206,24 +217,26 @@ export function SkillEditor({
         ) : null}
 
         {searchStatus === 'ready' && results.length > 0 ? (
-          <ul className="skill-editor__list" aria-label="Skill search results">
+          <ul className="skill-editor__results" aria-label="Skill search results">
             {results.map(skill => {
               const state = rowState[skill.skill_id]
               const isConfirmed = confirmedIds.has(skill.skill_id)
               return (
-                <li key={skill.skill_id} className="skill-editor__row">
+                <li key={skill.skill_id} className="skill-editor__result">
                   <span className="skill-editor__name">{skill.name}</span>
                   {isConfirmed ? (
-                    <span className="note">Added</span>
+                    <Badge tone="accent" icon="check">
+                      Added
+                    </Badge>
                   ) : (
-                    <button
-                      type="button"
-                      className="button button--primary"
-                      disabled={state?.status === 'pending'}
+                    <Button
+                      variant="ghost"
+                      icon="plus"
+                      busy={state?.status === 'pending'}
                       onClick={() => void runOperation(skill.skill_id, 'add')}
                     >
                       {state?.status === 'pending' ? 'Adding…' : 'Add'}
-                    </button>
+                    </Button>
                   )}
                   {state?.status === 'error' ? (
                     <span className="skill-editor__row-error">
@@ -237,7 +250,7 @@ export function SkillEditor({
         ) : null}
 
         {hasMore ? (
-          <p className="note">More matches than shown — narrow your search to see all results.</p>
+          <p className="note">More matches than shown. Narrow your search to see all results.</p>
         ) : null}
       </div>
     </section>

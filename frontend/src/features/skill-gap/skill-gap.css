@@ -1,14 +1,320 @@
-.skill-gap__role-label { font-weight: 600; }
-.skill-gap select { width: min(100%, 28rem); min-height: 2.75rem; padding: .55rem .75rem; border: 1px solid var(--rule); border-radius: .35rem; color: var(--ink); background: white; font: inherit; }
-.skill-gap__warning { padding: .65rem .8rem; border-left: 3px solid #b7791f; background: #fff8e7; }
-.skill-gap__summary { font-weight: 700; }
-.skill-gap__list { display: grid; gap: 1rem; margin: 0; padding: 0; list-style: none; }
-.skill-gap__row { padding: 1rem; border: 1px solid var(--rule); border-radius: .4rem; }
-.skill-gap__row-head { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: .5rem 1rem; }
-.skill-gap__bar { height: .65rem; margin-top: .6rem; overflow: hidden; border-radius: 99px; background: #e8e8e4; }
-.skill-gap__bar span { display: block; height: 100%; background: #4e7763; }
-.skill-gap__split, .skill-gap__experience { margin: .5rem 0 0; color: var(--muted, #555); font-size: .9rem; }
-.skill-gap__add { display: flex; flex-wrap: wrap; align-items: center; gap: .6rem 1rem; margin-top: .8rem; }
-.skill-gap__add label { display: flex; align-items: center; gap: .45rem; }
-.skill-gap__error { flex-basis: 100%; color: #9b2626; }
-.skill-gap button:focus-visible, .skill-gap select:focus-visible, .skill-gap input:focus-visible { outline: 3px solid #205d9b; outline-offset: 2px; }
+/*
+ * Skill Gap (redesign B4, "The Notebook"). Every value reads from
+ * src/styles/tokens.css; shared pieces (.field, .btn, .badge, .bar, .meter,
+ * .card, .empty, .notice, .inline-error, .checkbox, .skel) come from
+ * src/styles/components.css. Scoped under .skill-gap.
+ */
+
+/* The hand-off draws Skill Gap in the 720px reading column, centred in the
+   shell's wide column (see the B4 report: WIDE_ROUTES could drop skillGap). */
+.skill-gap {
+  width: 100%;
+  max-width: var(--column-discover);
+  margin-inline: auto;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+}
+
+/* ------------------------------------------------------------------ page head */
+.skill-gap__head {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.skill-gap__title {
+  font-family: var(--font-serif);
+  font-weight: var(--weight-regular);
+  font-size: var(--text-3xl);
+  line-height: var(--leading-3xl);
+  letter-spacing: var(--tracking-tight);
+}
+
+.skill-gap__lede {
+  font-size: var(--text-lg);
+  line-height: var(--leading-lg);
+  color: var(--color-ink-2);
+}
+
+/* ------------------------------------------------------------------ role picker */
+.skill-gap__role {
+  max-width: 26.25rem;
+}
+
+.skill-gap__role select.skill-gap__role-empty {
+  color: var(--color-ink-3);
+}
+
+.skill-gap__role option {
+  color: var(--color-ink);
+}
+
+.skill-gap__error-block {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-3);
+}
+
+.skill-gap__error-block > .inline-error {
+  align-self: stretch;
+}
+
+/* ------------------------------------------------------------------ result */
+.skill-gap__result {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+}
+
+.skill-gap__summary-card {
+  display: flex;
+  align-items: center;
+  gap: var(--space-5);
+  padding: calc(var(--space-4) + var(--space-1)) var(--space-5);
+}
+
+.skill-gap__summary-text {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.skill-gap__summary {
+  font-size: var(--text-xl);
+  line-height: var(--leading-xl);
+  font-weight: var(--weight-semibold);
+  letter-spacing: -0.01em;
+}
+
+.skill-gap__meter {
+  flex: none;
+  width: 16.25rem;
+}
+
+/* ------------------------------------------------------------------ ranked rows */
+.skill-gap__list {
+  display: flex;
+  flex-direction: column;
+}
+
+.skill-gap__row {
+  display: grid;
+  grid-template-columns: 1.75rem minmax(0, 1fr) 15rem;
+  align-items: start;
+  gap: var(--space-4);
+  padding: var(--space-4) 0;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.skill-gap__rank {
+  padding-top: var(--space-hair);
+  font-size: var(--text-sm);
+  line-height: var(--leading-sm);
+  font-variant-numeric: tabular-nums;
+  color: var(--color-ink-3);
+}
+
+.skill-gap__main {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.skill-gap__top {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.skill-gap__name {
+  min-width: 0;
+  font-size: var(--text-lg);
+  line-height: var(--leading-lg);
+  font-weight: var(--weight-medium);
+  overflow-wrap: anywhere;
+}
+
+.skill-gap__freq {
+  flex: none;
+  font-size: var(--text-sm);
+  line-height: var(--leading-sm);
+  font-variant-numeric: tabular-nums;
+  font-weight: var(--weight-medium);
+  color: var(--color-ink-2);
+  white-space: nowrap;
+}
+
+.skill-gap__facts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1) var(--space-4);
+  font-size: var(--text-sm);
+  line-height: var(--leading-sm);
+  color: var(--color-ink-3);
+}
+
+.skill-gap__facts .mono {
+  color: var(--color-ink-2);
+}
+
+.skill-gap__experience {
+  margin-top: var(--space-2);
+  font-size: var(--text-sm);
+  line-height: var(--leading-sm);
+  color: var(--color-ink-2);
+}
+
+.skill-gap__side {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: var(--space-2);
+}
+
+.skill-gap__side .btn {
+  height: 32px;
+}
+
+/* The tick-box that gates "Add to my skills": a real checkbox under the
+   drawn box, so keyboard, label click and screen readers work natively. */
+.skill-gap__confirm {
+  position: relative;
+}
+
+.skill-gap__confirm input {
+  position: absolute;
+  left: 0;
+  top: 50%;
+  width: 18px;
+  height: 18px;
+  margin: 0;
+  transform: translateY(-50%);
+  opacity: 0;
+  cursor: inherit;
+}
+
+.skill-gap__confirm input:focus-visible + .checkbox__box {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
+}
+
+.skill-gap__confirm:has(input:disabled) {
+  color: var(--color-ink-3);
+  cursor: not-allowed;
+}
+
+.skill-gap__add-error {
+  grid-column: 2 / -1;
+}
+
+/* ------------------------------------------------------------------ loading */
+.skill-gap__skel-name {
+  height: 16px;
+}
+
+.skill-gap__skel-bar {
+  height: 6px;
+}
+
+.skill-gap__skel-facts {
+  width: 40%;
+  height: 12px;
+}
+
+.skill-gap__skel-side {
+  width: 96px;
+  height: 22px;
+}
+
+/* ------------------------------------------------------------------ mobile */
+@media (max-width: 767.98px) {
+  .skill-gap {
+    gap: var(--space-4);
+  }
+
+  .skill-gap__title {
+    font-size: var(--text-2xl);
+    line-height: var(--leading-2xl);
+    letter-spacing: -0.01em;
+  }
+
+  .skill-gap__lede {
+    display: none;
+  }
+
+  .skill-gap__role {
+    max-width: none;
+  }
+
+  .skill-gap__result {
+    gap: var(--space-4);
+  }
+
+  .skill-gap__summary-card {
+    flex-direction: column;
+    align-items: stretch;
+    gap: calc(var(--space-2) + var(--space-hair));
+    padding: var(--space-4);
+  }
+
+  .skill-gap__summary-text {
+    display: contents;
+  }
+
+  .skill-gap__summary {
+    order: 1;
+    font-size: var(--text-lg);
+    line-height: var(--leading-lg);
+    letter-spacing: 0;
+  }
+
+  .skill-gap__meter {
+    order: 2;
+    width: auto;
+  }
+
+  .skill-gap__summary-card .t-meta {
+    order: 3;
+  }
+
+  .skill-gap__row {
+    grid-template-columns: 1.375rem minmax(0, 1fr);
+    gap: var(--space-2) calc(var(--space-2) + var(--space-hair));
+  }
+
+  .skill-gap__side {
+    grid-column: 2;
+    align-items: flex-start;
+    gap: calc(var(--space-2) + var(--space-hair));
+  }
+
+  .skill-gap__side .btn {
+    height: var(--touch-min);
+    padding: 0 var(--control-pad-lg);
+    font-size: var(--text-lg);
+    line-height: var(--leading-lg);
+  }
+
+  .skill-gap__confirm {
+    min-height: var(--touch-min);
+  }
+
+  /* Long retry labels drop under the message instead of squeezing it. */
+  .skill-gap .inline-error {
+    flex-wrap: wrap;
+  }
+
+  .skill-gap .inline-error__text {
+    flex-basis: calc(100% - var(--space-6));
+  }
+
+  .skill-gap__skeleton .skill-gap__side {
+    display: none;
+  }
+}
