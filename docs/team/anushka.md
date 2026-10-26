@@ -150,3 +150,33 @@ assumed from memory of an earlier session):
 - Final check results after adding successful DELETE, pending DELETE navigation, two-way tab-keyboard, and pending/rollback count assertions: `cd frontend && npm test` — 6 files, 72 tests passed; `cd frontend && npm run build` — TypeScript passed, Vite transformed 94 modules and built in 129ms; `git diff --check` passed.
 - Confirmation action label is `Remove`, scoped within the accessible confirmation group.
 - Remaining unverified: live WP-2 integration and manual browser walkthrough. Questions: none.
+### WP-9 progress note (overnight 2026-10-26)
+
+- Branch: `feat/wp9-skill-gap-ui`
+- Commit: `9dabafb` (Codex build) + `52e053a` (review fix round); orchestrator re-ran checks on `52e053a`: npm test 59 passed, npm run build clean
+- Result: implemented role selection, sample-size and ranked skill display, confirmation-gated add-to-skills, retry/error states, and contract-shaped mock/real clients.
+- Frontend checks: `cd frontend && npm test && npm run build` — 55 tests passed across 5 files; TypeScript and Vite production build passed.
+- Backend regression checks (run by orchestrator with DB/environment variables unset): `uv run --locked ruff check .` — All checks passed; `uv run --locked ruff format --check .` — 51 files already formatted; `uv run --locked pytest` — 51 passed, 38 skipped in 10.60s (disposable DB integration tests skipped; no shared DB or `.env` used).
+- Unverified: no live API/Supabase/Mongo integration; the active screen client intentionally uses synthetic mocks.
+- Open questions: none within WP-9; switching to real service is pending backend integration on `dev`.
+- Real-client switch in `frontend/src/features/skill-gap/activeClient.ts:1`: replace `import { createDefaultSkillGapClient } from './client'` with `import { createRealSkillGapClient as createDefaultSkillGapClient } from './realClient'`.
+- WP-9 follow-up review fix: successful skill adds now reconcile membership across role changes and overlay later role GET responses; regression tests `keeps a successfully added skill confirmed when the selected role also contains it` and `overlays a successful add on a role GET that resolves afterward` passed. Latest frontend check: 57 tests passed across 5 files; build passed.
+
+### WP-9 fix round (overnight 2026-10-26)
+
+- Findings fixed: summary now uses API `top_n` and is hidden for empty skills; zero-sample rows render a safe 0%; role/gap retry tests now fail once then recover; default `Unclassified` fixture has a positive posting count and matching sample; removed captured `role === targetRole` comparisons while retaining generation guards; role label only renders with its select and results are no longer one broad live region.
+- Regressions: `uses the API top_n in the summary for three and ten skills, and hides it for zero`; `renders a zero-sample skill as 0% without invalid values and hides summary for an empty result`; `retries role and gap errors and renders recovered data`; `shows roles with counts, ranked details, bar, experience and sample warning below five`; `ignores a late result from the previously selected role`; `only renders the role label when its select is available`.
+- Preserved cross-role add reconciliation tests: `keeps a successfully added skill confirmed when the selected role also contains it` and `overlays a successful add on a role GET that resolves afterward`.
+- Checks: targeted screen suite 13/13 passed; final `npm test` 59/59 across 5 files; `npm run build` passed (Vite transformed 94 modules, built in 101ms).
+- Unverified: live endpoint/Supabase/Mongo integration remains untested; mocks remain selected by default. No commit made.
+
+### WP-9 follow-up: no role pre-selected (2026-10-26)
+
+- Decided by Zhihao. Skill Gap no longer auto-selects the first role. It opens on a disabled
+  "Pick a role…" option with "Pick a role to see your gap." and fetches nothing until the
+  student picks a role. (The profile has no target role to pre-select from.) A role the student
+  picked is kept when the role list reloads.
+- The "I already have this skill" tick-box gate on "Add to my skills" stays, as built.
+- New test "starts with no role selected and loads a gap only after the student picks one"
+  (fails with the old auto-select). Existing tests now pick their role explicitly.
+- Checks: `npm test` 5 files / 60 tests passed; `npm run build` ✓; `git diff --check` clean.
