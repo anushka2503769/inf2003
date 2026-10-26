@@ -81,6 +81,9 @@ export function VaultScreen({ client = trackerClient }: VaultScreenProps) {
   const cancelButton = useRef<HTMLButtonElement | null>(null)
   const removeButtons = useRef(new Map<string, HTMLButtonElement>())
   const lastConfirmation = useRef<string | null>(null)
+  // Where focus goes after a successful remove: the neighbouring row, else the list.
+  const focusAfterRemove = useRef<string | null>(null)
+  const panel = useRef<HTMLDivElement | null>(null)
   const tabButtons = useRef<Partial<Record<TrackerStatus, HTMLButtonElement | null>>>({})
   const mobile = useIsMobile()
 
@@ -129,7 +132,14 @@ export function VaultScreen({ client = trackerClient }: VaultScreenProps) {
 
   useEffect(() => {
     if (confirmingId) cancelButton.current?.focus()
-    else if (lastConfirmation.current) removeButtons.current.get(lastConfirmation.current)?.focus()
+    else if (lastConfirmation.current) {
+      const own = removeButtons.current.get(lastConfirmation.current)
+      const neighbour = focusAfterRemove.current ? removeButtons.current.get(focusAfterRemove.current) : undefined
+      if (own) own.focus()
+      else if (neighbour) neighbour.focus()
+      else panel.current?.focus()
+    }
+    focusAfterRemove.current = null
     lastConfirmation.current = confirmingId
   }, [confirmingId])
 
@@ -186,6 +196,8 @@ export function VaultScreen({ client = trackerClient }: VaultScreenProps) {
     setRefreshError('')
     try {
       await client.remove(row.job.job_id)
+      const index = rows.findIndex(item => item.job.job_id === row.job.job_id)
+      focusAfterRemove.current = (rows[index + 1] ?? rows[index - 1])?.job.job_id ?? null
       setRows(current => current.filter(item => item.job.job_id !== row.job.job_id))
       setTotal(current => Math.max(0, current - 1))
       adjustCount(row.status)
@@ -286,9 +298,11 @@ export function VaultScreen({ client = trackerClient }: VaultScreenProps) {
       <div
         className="vault__panel"
         id="vault-panel"
+        ref={panel}
         {...(mobile
           ? { role: 'region', 'aria-label': `${statusLabel} jobs` }
-          : { role: 'tabpanel', 'aria-labelledby': activeTabId, tabIndex: 0 })}
+          : { role: 'tabpanel', 'aria-labelledby': activeTabId })}
+        tabIndex={mobile ? -1 : 0}
       >
         {loading ? (
           <>
@@ -390,7 +404,7 @@ export function VaultScreen({ client = trackerClient }: VaultScreenProps) {
                         <span className="t-meta vault__closed">Posting closed</span>
                       ) : null}
                       <button
-                        aria-label="Remove"
+                        aria-label={`Remove ${row.job.title}`}
                         className={buttonClass({ variant: 'ghost', iconOnly: true }, 'vault__remove')}
                         disabled={pendingJobId !== null}
                         onClick={() => setConfirmingId(row.job.job_id)}

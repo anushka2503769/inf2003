@@ -130,14 +130,14 @@ describe('VaultScreen', () => {
     render(<VaultScreen client={client} />)
 
     const row = await screen.findByRole('heading', { name: JOB.title }).then(node => node.closest('li')!)
-    await user.click(within(row).getByRole('button', { name: 'Remove' }))
+    await user.click(within(row).getByRole('button', { name: /^Remove / }))
     const confirmation = screen.getByRole('group', { name: /confirm removal/i })
     expect(within(confirmation).getByRole('button', { name: 'Cancel' })).toHaveFocus()
     await user.keyboard('{Escape}')
     expect(screen.queryByRole('group', { name: /confirm removal/i })).not.toBeInTheDocument()
-    expect(within(row).getByRole('button', { name: 'Remove' })).toHaveFocus()
+    expect(within(row).getByRole('button', { name: /^Remove / })).toHaveFocus()
 
-    await user.click(within(row).getByRole('button', { name: 'Remove' }))
+    await user.click(within(row).getByRole('button', { name: /^Remove / }))
     await user.click(screen.getByRole('button', { name: 'Cancel' }))
     expect(client.remove).not.toHaveBeenCalled()
     expect(screen.getByRole('heading', { name: JOB.title })).toBeInTheDocument()
@@ -154,13 +154,41 @@ describe('VaultScreen', () => {
     render(<VaultScreen client={client} />)
 
     const row = await screen.findByRole('heading', { name: JOB.title }).then(node => node.closest('li')!)
-    await user.click(within(row).getByRole('button', { name: 'Remove' }))
+    await user.click(within(row).getByRole('button', { name: /^Remove / }))
     const confirmation = screen.getByRole('group', { name: /confirm removal/i })
     await user.click(within(confirmation).getByRole('button', { name: 'Remove' }))
 
     expect(client.remove).toHaveBeenCalledWith(JOB.job_id)
     await waitFor(() => expect(screen.queryByRole('heading', { name: JOB.title })).not.toBeInTheDocument())
     expect(screen.queryByRole('group', { name: /confirm removal/i })).not.toBeInTheDocument()
+  })
+
+  it('names each Remove button after its posting', async () => {
+    render(<VaultScreen client={fakeClient()} />)
+    expect(await screen.findByRole('button', { name: `Remove ${JOB.title}` })).toBeInTheDocument()
+  })
+
+  it('moves focus to the next row after a successful remove, and to the list when none is left', async () => {
+    const ids = ['00000000-0000-4000-8000-000000000011', '00000000-0000-4000-8000-000000000012']
+    let remaining = [...ids]
+    const client = fakeClient({
+      list: vi.fn(async (tabStatus) => ({
+        items: tabStatus === 'SAVED' ? remaining.map(id => item('SAVED', id)) : [],
+        total: tabStatus === 'SAVED' ? remaining.length : 0,
+      })),
+      summary: vi.fn(async () => summary({ SAVED: remaining.length })),
+      remove: vi.fn(async (jobId: string) => { remaining = remaining.filter(id => id !== jobId) }),
+    })
+    const user = userEvent.setup()
+    render(<VaultScreen client={client} />)
+
+    await user.click(await screen.findByRole('button', { name: 'Remove Job 11' }))
+    await user.click(within(screen.getByRole('group', { name: /confirm removal/i })).getByRole('button', { name: 'Remove' }))
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Remove Job 12' })).toHaveFocus())
+
+    await user.click(screen.getByRole('button', { name: 'Remove Job 12' }))
+    await user.click(within(screen.getByRole('group', { name: /confirm removal/i })).getByRole('button', { name: 'Remove' }))
+    await waitFor(() => expect(document.getElementById('vault-panel')).toHaveFocus())
   })
 
   it('keeps the row and confirmation open when DELETE fails', async () => {
@@ -171,7 +199,7 @@ describe('VaultScreen', () => {
     render(<VaultScreen client={client} />)
 
     const row = await screen.findByRole('heading', { name: JOB.title }).then(node => node.closest('li')!)
-    await user.click(within(row).getByRole('button', { name: 'Remove' }))
+    await user.click(within(row).getByRole('button', { name: /^Remove / }))
     const confirmation = screen.getByRole('group', { name: /confirm removal/i })
     await user.click(within(confirmation).getByRole('button', { name: 'Remove' }))
 
@@ -303,7 +331,7 @@ describe('VaultScreen', () => {
     await user.click(await screen.findByRole('button', { name: 'Next page' }))
     await screen.findByRole('heading', { name: 'Job 21' })
     const row = screen.getByRole('heading', { name: 'Job 21' }).closest('li')!
-    await user.click(within(row).getByRole('button', { name: 'Remove' }))
+    await user.click(within(row).getByRole('button', { name: /^Remove / }))
     const confirmation = screen.getByRole('group', { name: /confirm removal/i })
     await user.click(within(confirmation).getByRole('button', { name: 'Remove' }))
 
