@@ -22,6 +22,10 @@ from .config import get_settings
 
 _MAX_IDLE = 20  # spare connections kept open per backend process
 _MAX_IDLE_SECONDS = 60.0  # spares unused for longer are closed, not reused
+# Idle age uses the wall clock, not time.monotonic(): on macOS the monotonic
+# clock stops while the laptop sleeps, so a connection parked before an
+# hour-long sleep would look seconds old, be reused, and hang on a socket the
+# network dropped meanwhile.
 
 _idle: list["_PooledConnection"] = []
 _idle_lock = threading.Lock()
@@ -47,7 +51,7 @@ class _PooledConnection(PGConnection):
         if self.autocommit or self.info.transaction_status != TRANSACTION_STATUS_IDLE:
             self.discard()  # not in a known clean state
             return
-        self._idle_since = time.monotonic()
+        self._idle_since = time.time()
         with _idle_lock:
             if len(_idle) < _MAX_IDLE:
                 self._parked = True
@@ -65,7 +69,7 @@ def _take_idle(database_url: str) -> PGConnection | None:
     """Pop the most recently returned usable connection, closing stale ones."""
     stale: list[_PooledConnection] = []
     found = None
-    now = time.monotonic()
+    now = time.time()
     with _idle_lock:
         while _idle:
             conn = _idle.pop()  # newest first
@@ -73,7 +77,8 @@ def _take_idle(database_url: str) -> PGConnection | None:
             if (
                 conn._pool_dsn == database_url
                 and not conn.closed
-                and now - conn._idle_since < _MAX_IDLE_SECONDS
+                # a negative age means the clock was set back: treat as stale
+                and 0.0 <= now - conn._idle_since < _MAX_IDLE_SECONDS
             ):
                 found = conn
                 break
