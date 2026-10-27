@@ -12,7 +12,7 @@ Prerequisites: Docker running, `uv`, and the backend dependencies resolvable (`u
 ```bash
 bash backend/scripts/run_benchmark.sh              # from the repo root; about 8-10 minutes
 BENCH_SIZES=5000 bash backend/scripts/run_benchmark.sh   # primary run only, faster
-BENCH_OUT=/path/to/out.md bash backend/scripts/run_benchmark.sh
+BENCH_OUT=docs/perf/my-run.md bash backend/scripts/run_benchmark.sh   # default: docs/perf/results-<today>.md
 ```
 
 The wrapper starts `postgres:16` and `mongo:7` on random `127.0.0.1` ports, creates the

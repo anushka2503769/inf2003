@@ -333,6 +333,7 @@ bash backend/scripts/run_benchmark.sh
 ```
 
 It takes about 10 to 15 minutes, removes its containers when it finishes (also on Ctrl+C), and
-writes `docs/perf/results-2026-10-26.md`. `BENCH_SIZES=5000` runs only the 5,000-job size,
+writes `docs/perf/results-<today>.md` (for example `results-2026-10-27.md`), so it never overwrites an
+earlier committed run. `BENCH_SIZES=5000` runs only the 5,000-job size,
 which is faster. What each case measures and how to read the tables:
 [docs/perf/README.md](perf/README.md).

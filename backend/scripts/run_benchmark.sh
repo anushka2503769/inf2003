@@ -6,7 +6,7 @@
 #
 #   bash backend/scripts/run_benchmark.sh               # 5,000 jobs and a 50,000-job run
 #   BENCH_SIZES=5000 bash backend/scripts/run_benchmark.sh
-#   BENCH_OUT=/some/path.md bash backend/scripts/run_benchmark.sh
+#   BENCH_OUT=docs/perf/my-run.md bash backend/scripts/run_benchmark.sh   # relative to where you run it
 
 set -Eeuo pipefail
 
@@ -15,8 +15,19 @@ repo_root=$(CDPATH= cd -- "$script_dir/../.." && pwd)
 backend_dir="$repo_root/backend"
 db_dir="$repo_root/docs/DB"
 sizes="${BENCH_SIZES:-5000,50000}"
-out_file="${BENCH_OUT:-$repo_root/docs/perf/results-2026-10-26.md}"
+# Default: a dated file, so a re-run never overwrites a committed results file.
+out_file="${BENCH_OUT:-$repo_root/docs/perf/results-$(date +%F).md}"
 mongo_database="jobless_simulator_bench"
+
+# Resolve a relative BENCH_OUT against the caller's directory now: the run later
+# changes into backend/, and the file is written only at the very end. Fail before
+# the 10-minute run, not after it, if the folder cannot be written.
+[[ "$out_file" = /* ]] || out_file="$PWD/$out_file"
+out_dir=$(dirname -- "$out_file")
+if ! mkdir -p "$out_dir" 2>/dev/null || [[ ! -w "$out_dir" ]]; then
+    printf 'Cannot write the results folder: %s\n' "$out_dir" >&2
+    exit 1
+fi
 
 container_name="inf2003-postgres-bench-$$-$RANDOM"
 mongo_container_name="inf2003-mongo-bench-$$-$RANDOM"
@@ -138,7 +149,6 @@ done
 database_url="postgresql://postgres:postgres@127.0.0.1:${host_port}/postgres"
 # directConnection: never discover other replica-set members.
 mongodb_uri="mongodb://127.0.0.1:${mongo_host_port}/?directConnection=true"
-mkdir -p "$(dirname -- "$out_file")"
 cd "$backend_dir"
 
 # uv must not read backend/.env, and nothing may leak in from the shell.
