@@ -6,6 +6,7 @@ Supabase project.
 """
 
 import os
+import time
 from collections.abc import Iterator
 
 import psycopg2
@@ -175,6 +176,24 @@ def test_idle_connection_past_its_age_is_closed_not_reused(
     conn = sql_db.get_pg_connection()
     conn.close()
     monkeypatch.setattr(sql_db, "_MAX_IDLE_SECONDS", 0.0)
+
+    fresh = sql_db.get_pg_connection()
+    try:
+        assert fresh is not conn
+        assert conn.closed
+    finally:
+        fresh.close()
+
+
+@pytest.mark.parametrize("shift", [-3600.0, 3600.0], ids=["parked-an-hour-ago", "clock-set-back"])
+def test_idle_age_is_wall_clock_and_rejects_out_of_range_ages(shift: float) -> None:
+    from app import sql_db
+
+    conn = sql_db.get_pg_connection()
+    conn.close()
+    # Wall-clock timestamps, so time spent asleep counts towards the idle age.
+    assert abs(conn._idle_since - time.time()) < 5
+    conn._idle_since += shift
 
     fresh = sql_db.get_pg_connection()
     try:
