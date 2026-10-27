@@ -51,10 +51,11 @@ the benchmark (statistics are refreshed once before the toggling starts, not at 
 | 4. Tracker list | `PostgresTrackerStore.list_items` (status SAVED, first page) for the busiest of the 50 seeded users and for one supplementary heavy user with 2,000 tracker rows | drop/recreate `user_jobs_user_status_idx` |
 | 5. Throughput | 10 concurrent `httpx` workers call `GET /api/discover` for 30 s against the real FastAPI app, with the shared job read lock and with it replaced by a no-op | lock on/off |
 
-Cases 1 and 4 have two variants. "New connection per call" is the real path (the app opens a
-PostgreSQL connection per request). "Warm connection" reuses one connection, so it shows the
-query cost without connection set-up; use it to judge the index, use the first to judge what a
-user would feel.
+Cases 1 and 4 have two variants. "App connection handling" is the real path: whatever
+`backend/app/sql_db.py` does (since the connection-reuse change, a connection from its idle pool;
+in the 2026-10-26 run, labelled "new connection per call", a fresh connection every call).
+"Warm connection" reuses one connection, so it shows the query cost without connection set-up;
+use it to judge the index, use the first to judge what a user would feel.
 
 ## Reading the results
 
@@ -131,11 +132,12 @@ tens of percent between runs.
     iteration failed early and often, and even one connection per iteration started failing after
     about 25 s of sustained churn.
   - What it means for the app: under sustained load the backend, not the database, runs out of
-    connections to open. A small connection pool (for example
-    `psycopg2.pool.ThreadedConnectionPool`), with the lock taken on the request's own connection,
-    would remove most connection set-up and this failure mode. That change belongs in
-    `backend/app/` and is not made here; it is a candidate improvement for the report's
-    discussion section.
+    connections to open.
+  - Fixed after this run: `backend/app/sql_db.py` now reuses connections. `close()` rolls a
+    connection back and parks it in a small idle pool (up to 20 per process, each reused for at
+    most 60 s idle), and the next request takes it instead of opening a new one. Callers did
+    not change. The 2026-10-26 results above were measured before this change; re-run the
+    benchmark for after-numbers.
   - Every phase runs once and is reported as measured, in order (lock, no lock, lock again),
     with failures beside the successes. Nothing is retried or discarded. Requests/s counts
     successful requests only.
@@ -151,9 +153,9 @@ tens of percent between runs.
   cold-cache and larger-than-memory behaviour is not measured.
 - Fixed random seed, so datasets are identical between runs; timings are not (they vary by a
   few tens of percent between runs).
-- The throughput case uses unsigned development tokens (token verification is skipped) and no
-  connection pool; production auth adds a little CPU per request.
-- No concurrent writers in the throughput case, and no connection pool in the app, so the
-  throughput numbers are partly a measurement of connection set-up cost and of the host's
+- The throughput case uses unsigned development tokens (token verification is skipped);
+  production auth adds a little CPU per request.
+- No concurrent writers in the throughput case. Before connection reuse (the 2026-10-26 run) the
+  throughput numbers were partly a measurement of connection set-up cost and of the host's
   outgoing-port limit (see the Finding above). Throughput has swung by up to about 2x between
   runs on this laptop.
