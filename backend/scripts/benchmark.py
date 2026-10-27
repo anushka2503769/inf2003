@@ -352,7 +352,7 @@ def run_discover(database_url: str, ddl: dict[str, str], user_id: str) -> tuple[
                 rows.append(
                     result_row(
                         "1. Discover",
-                        f"{variant}; new connection per call (real path)",
+                        f"{variant}; app connection handling (real path)",
                         f"{label} partial indexes",
                         measure(feed(job_type, arrangement)),
                     )
@@ -505,7 +505,7 @@ def run_tracker(database_url: str, ddl: dict[str, str], busy_user: str, heavy_us
                 rows.append(
                     result_row(
                         "4. Tracker list",
-                        f"{tag}; new connection per call (real path)",
+                        f"{tag}; app connection handling (real path)",
                         f"{label} (user_id, status) index",
                         measure(lambda u=uid: store.list_items(u, ["SAVED"], 20, 0)),
                     )
@@ -590,8 +590,8 @@ def run_throughput(
         )
     ):
         if position:
-            # Every request opens fresh TCP connections to PostgreSQL (there is no pool).
-            # Let the first run's TIME_WAIT sockets drain so the second run does not
+            # Connections the server could not park in its idle pool are closed and sit in
+            # TIME_WAIT. Let the first run's sockets drain so the second run does not
             # start close to local ephemeral-port exhaustion.
             time.sleep(TIME_WAIT_PAUSE_SECONDS)
         token = secrets.token_hex(16)
