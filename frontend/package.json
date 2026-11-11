@@ -8,6 +8,7 @@
   },
   "scripts": {
   "dev": "vite --host 127.0.0.1",
+  "dev:quickstart": "vite --host 127.0.0.1 --mode quickstart",
   "build": "tsc --noEmit && vite build",
   "typecheck": "tsc --noEmit",
   "test": "vitest run",

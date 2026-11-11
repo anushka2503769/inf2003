@@ -2,8 +2,9 @@ import { createContext, useCallback, useEffect, useMemo, useState, type ReactNod
 import type { Session } from '@supabase/supabase-js'
 
 import { configureApiAuth } from '../lib/api-client'
-import { isAuthConfigured } from '../lib/env'
+import { isAuthConfigured, isLocalDemoAuth } from '../lib/env'
 import { authCallbackUrl, supabase } from '../lib/supabase'
+import { forgetDemoSignIn, loadDemoSession, makeDemoSession, rememberDemoSignIn } from './localDemo'
 
 /**
  * Owns the Supabase session. Nothing else in the app reads from Supabase.
@@ -47,11 +48,18 @@ function readIdentity(session: Session | null): GoogleIdentity | null {
   }
 }
 
+function initialStatus(demoSession: Session | null): SessionStatus {
+  if (isLocalDemoAuth) return demoSession ? 'signed-in' : 'signed-out'
+  return isAuthConfigured ? 'loading' : 'unconfigured'
+}
+
 export function SessionProvider({ children }: { children: ReactNode }) {
-  const [session, setSession] = useState<Session | null>(null)
-  const [status, setStatus] = useState<SessionStatus>(
-    isAuthConfigured ? 'loading' : 'unconfigured',
+  // In the local demo (auth/localDemo.ts) there is no Supabase: the session is the
+  // demo student's, remembered in localStorage across reloads.
+  const [session, setSession] = useState<Session | null>(() =>
+    isLocalDemoAuth ? loadDemoSession() : null,
   )
+  const [status, setStatus] = useState<SessionStatus>(() => initialStatus(session))
 
   useEffect(() => {
     if (supabase === null) return
@@ -80,6 +88,12 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   }, [])
 
   const signInWithGoogle = useCallback(async () => {
+    if (isLocalDemoAuth) {
+      rememberDemoSignIn()
+      setSession(makeDemoSession())
+      setStatus('signed-in')
+      return
+    }
     if (supabase === null) return
     const { error } = await supabase.auth.signInWithOAuth({
       provider: 'google',
@@ -94,8 +108,12 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   }, [])
 
   const signOut = useCallback(async () => {
-    if (supabase === null) return
-    await supabase.auth.signOut()
+    if (isLocalDemoAuth) {
+      forgetDemoSignIn()
+    } else {
+      if (supabase === null) return
+      await supabase.auth.signOut()
+    }
     setSession(null)
     setStatus('signed-out')
   }, [])
@@ -106,11 +124,18 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     configureApiAuth({
       getAccessToken: async () => {
+        if (isLocalDemoAuth) return loadDemoSession()?.access_token ?? null
         if (supabase === null) return null
         const { data } = await supabase.auth.getSession()
         return data.session?.access_token ?? null
       },
       onUnauthenticated: () => {
+        if (isLocalDemoAuth) {
+          forgetDemoSignIn()
+          setSession(null)
+          setStatus('signed-out')
+          return
+        }
         void supabase?.auth.signOut()
       },
     })
