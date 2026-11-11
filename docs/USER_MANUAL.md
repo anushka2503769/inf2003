@@ -1,7 +1,54 @@
 # Jobless Simulator user manual
 
-This manual takes you from a fresh laptop to a running copy of the app, using your own
-Supabase project and your own MongoDB Atlas cluster. Follow sections 1 to 7 in order.
+This manual takes you from a fresh laptop to a running copy of the app. There are two ways:
+
+- **Quick start (about 5 minutes, no accounts):** local PostgreSQL and MongoDB in Docker,
+  the real job data loaded for you, and a demo student to sign in as. Start here if you
+  want to try or mark the app.
+- **Full setup (sections 1 to 7):** your own Supabase project with Google sign-in and your
+  own MongoDB Atlas cluster, as the app runs for real users.
+
+## Quick start (local, no accounts needed)
+
+You need Node.js and npm, uv and Docker from the table in section 2 (not `mongosh`, and no
+Google, Supabase or Atlas account). Start Docker Desktop first. From the repository root:
+
+```sh
+cd frontend && npm ci && cd ..
+bash backend/scripts/local_quickstart.sh up
+```
+
+`up` starts PostgreSQL 16 on `127.0.0.1:55432` and MongoDB 7 on `127.0.0.1:57017`, creates
+the schema from `docs/DB/` (tables, constraints, skills, triggers, views, collections and
+validators), loads the LinkedIn export from `data/raw/` (504 jobs; if the folder is
+missing it loads a small test fixture instead) and adds a demo student with a few skills
+and three tracker rows. It ends by printing the job and link counts.
+
+Then run these in two terminals, both from the repository root, and leave them running:
+
+```sh
+bash backend/scripts/local_quickstart.sh backend
+```
+
+```sh
+cd frontend && npm run dev:quickstart
+```
+
+Open <http://127.0.0.1:5173> and choose **Continue as demo student**. Everything in the
+demo walkthrough (section 8) works: Discover, the Vault, Skill Gap and résumé upload on
+Profile. When you are done, stop both terminals with Ctrl+C and remove the databases:
+
+```sh
+bash backend/scripts/local_quickstart.sh down
+```
+
+How it differs from the full setup: sign-in is a development stand-in, not Google. The
+browser sends an unsigned token for the demo student and the API, started by `backend`,
+accepts it only because it runs with `AUTH_ALLOW_UNVERIFIED_TOKENS=true`, which the backend
+refuses under `APP_ENV=production`. `npm run dev:quickstart` is the only way to show the
+demo button; a production build never does. The quick start never reads `backend/.env`
+and never touches a Supabase or Atlas project. If port 55432, 57017, 8000 or 5173 is
+already in use, stop whatever holds it (`down` removes the quick-start containers).
 
 ## 1. What the app is
 

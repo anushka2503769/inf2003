@@ -15,10 +15,19 @@ const supabaseUrl = read('VITE_SUPABASE_URL')
 const supabasePublishableKey = read('VITE_SUPABASE_PUBLISHABLE_KEY')
 
 /**
- * True when both Supabase values are present. When false the app still runs and
- * the sign-in screen explains what to add, instead of throwing on a blank page.
+ * Local demo sign-in (auth/localDemo.ts) for the Docker quick start. Only the Vite
+ * dev server started with `npm run dev:quickstart` (mode "quickstart") turns it on;
+ * a production build never does.
  */
-export const isAuthConfigured = supabaseUrl !== '' && supabasePublishableKey !== ''
+export const isLocalDemoAuth = import.meta.env.DEV && import.meta.env.MODE === 'quickstart'
+
+/**
+ * True when both Supabase values are present, or in the local demo. When false the
+ * app still runs and the sign-in screen explains what to add, instead of throwing
+ * on a blank page.
+ */
+export const isAuthConfigured =
+  isLocalDemoAuth || (supabaseUrl !== '' && supabasePublishableKey !== '')
 
 export const env = {
   supabaseUrl,
@@ -26,6 +35,7 @@ export const env = {
   /** Relative by default so the Vite dev proxy handles /api (no CORS setup). */
   apiBaseUrl: read('VITE_API_BASE_URL') || '/api',
   isDev: import.meta.env.DEV,
+  localDemoAuth: isLocalDemoAuth,
   /** VITE_DATA=mock serves synthetic Discover, Vault and Skill Gap data (demos, design QA). */
   useMockData: read('VITE_DATA') === 'mock',
 } as const

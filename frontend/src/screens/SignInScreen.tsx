@@ -4,11 +4,12 @@ import { Navigate, useLocation } from 'react-router-dom'
 import { useSession } from '../auth/useSession'
 import { Badge } from '../components/Badge'
 import { Brand } from '../components/Brand'
+import { Button } from '../components/Button'
 import { Card } from '../components/Card'
 import { GoogleButton } from '../components/GoogleButton'
 import { InlineError } from '../components/Feedback'
 import { Meter } from '../components/Meter'
-import { missingAuthEnv } from '../lib/env'
+import { isLocalDemoAuth, missingAuthEnv } from '../lib/env'
 import { HOME_ROUTE } from '../app/routes'
 
 /** Router state the auth callback leaves when Google sign-in was cancelled. */
@@ -60,7 +61,17 @@ export function SignInScreen() {
           </div>
 
           <div className="signin__action">
-            {status === 'unconfigured' ? (
+            {isLocalDemoAuth ? (
+              <>
+                <Button variant="primary" size="lg" block onClick={() => void signInWithGoogle()}>
+                  Continue as demo student
+                </Button>
+                <p className="t-meta">
+                  Local quick start: no Google account needed. You sign in as a seeded demo
+                  student on this machine&rsquo;s databases.
+                </p>
+              </>
+            ) : status === 'unconfigured' ? (
               <SetupNotice />
             ) : (
               <>
